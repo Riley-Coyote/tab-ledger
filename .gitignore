@@ -1,0 +1,18 @@
+# Databases (contain personal session data)
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+
+# Runtime
+*.pid
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+
+# Environment
+.env

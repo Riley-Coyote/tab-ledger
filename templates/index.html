@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tab Ledger</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="min-h-screen">
+    <div id="app" class="max-w-6xl mx-auto px-6 py-8">
+
+        <!-- Header -->
+        <header class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-lg font-semibold tracking-tight" style="color: var(--text-primary);">
+                    <span style="color: var(--accent);">&#9632;</span> Tab Ledger
+                </h1>
+                <p class="text-xs mt-1" style="color: var(--text-muted);">Nothing lost. Everything findable.</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="takeSnapshot()" class="nav-tab text-xs" title="Snapshot now">
+                    &#10227; Snapshot
+                </button>
+                <button onclick="reindexCC()" class="nav-tab text-xs" title="Re-index Claude Code sessions">
+                    &#8635; Index CC
+                </button>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="flex items-center gap-2 mb-6 flex-wrap">
+            <button class="nav-tab active" data-view="right-now" onclick="switchView('right-now')">Right Now</button>
+            <button class="nav-tab" data-view="today" onclick="switchView('today')">Today</button>
+            <button class="nav-tab" data-view="search" onclick="switchView('search')">What Was I Doing?</button>
+            <button class="nav-tab" data-view="history" onclick="switchView('history')">History</button>
+            <button class="nav-tab" data-view="parking" onclick="switchView('parking')">Parking Lot</button>
+        </nav>
+
+        <!-- Content Area -->
+        <main id="content" class="fade-in">
+            <div class="flex items-center justify-center py-20">
+                <div class="spinner"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-container"></div>
+
+    <script>
+    // ─── State ────────────────────────────────────────────
+    let currentView = 'right-now';
+    const categoryColors = {{ category_colors | tojson }};
+
+    // ─── Navigation ───────────────────────────────────────
+    function switchView(view) {
+        currentView = view;
+        document.querySelectorAll('.nav-tab[data-view]').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.view === view);
+        });
+        loadView(view);
+    }
+
+    async function loadView(view) {
+        const content = document.getElementById('content');
+        content.innerHTML = '<div class="flex items-center justify-center py-20"><div class="spinner"></div></div>';
+
+        try {
+            switch(view) {
+                case 'right-now': await loadRightNow(); break;
+                case 'today': await loadToday(); break;
+                case 'search': loadSearch(); break;
+                case 'history': await loadHistory(); break;
+                case 'parking': await loadParking(); break;
+            }
+        } catch(e) {
+            content.innerHTML = `<div class="card text-center py-12"><p style="color: var(--text-muted);">Error loading view: ${e.message}</p></div>`;
+        }
+    }
+
+    // ─── Right Now ────────────────────────────────────────
+    let _rnData = null;  // cached for sidebar interactions
+
+    async function loadRightNow() {
+        const data = await api('/api/right-now');
+        _rnData = data;
+        const content = document.getElementById('content');
+
+        const snap = data.snapshot;
+        const snapTime = new Date(snap.taken_at).toLocaleTimeString();
+        const isExact = data.tab_source === 'cdp';
+        const sourceLabel = isExact ? 'CDP (exact)' : 'Session files (approx)';
+
+        // Sort categories: by tab count descending
+        const cats = Object.entries(data.tabs_by_category)
+            .sort((a, b) => b[1].length - a[1].length);
+
+        // Stats bar
+        let html = `
+        <div class="fade-in">
+            <div class="rn-stats-bar">
+                <div class="rn-stat"><strong>${data.total_tabs}</strong> tabs</div>
+                <div class="rn-stat"><strong>${data.category_count}</strong> categories</div>
+                <div class="rn-stat" style="color: ${data.stale_count > 0 ? '#f87171' : 'inherit'}"><strong>${data.stale_count}</strong> stale</div>
+                <div class="rn-stat"><strong>${data.cc_sessions.length}</strong> CC sessions</div>
+                <span class="rn-source ${isExact ? 'exact' : ''}">${sourceLabel}</span>
+            </div>
+
+            <p class="text-xs mb-3" style="color: var(--text-muted);">
+                Snapshot #${snap.id} &middot; ${snapTime} &middot; ${snap.source}
+            </p>
+
+            <!-- Two-panel layout -->
+            <div class="rn-panels">
+                <!-- Left: category sidebar -->
+                <div class="rn-sidebar" id="rn-sidebar">
+                    <div class="rn-sidebar-item selected" data-cat="__all__" onclick="rnSelectCategory('__all__')">
+                        <span class="cat-dot" style="background: var(--accent);"></span>
+                        <span class="rn-cat-name">All Categories</span>
+                        <span class="rn-cat-count">${data.total_tabs}</span>
+                    </div>
+                    ${cats.map(([cat, tabs]) => {
+                        const color = categoryColors[cat] || '#9CA3AF';
+                        const isStaleCategory = cat === 'Stale';
+                        const hasStale = tabs.some(t => t.is_stale);
+                        return `
+                        <div class="rn-sidebar-item" data-cat="${escAttr(cat)}" onclick="rnSelectCategory('${escAttr(cat)}')">
+                            <span class="cat-dot" style="background: ${color};"></span>
+                            <span class="rn-cat-name">${escHtml(cat)}${hasStale ? ' &#9888;' : ''}</span>
+                            <span class="rn-cat-count">${tabs.length}</span>
+                            <button class="rn-park-btn" onclick="event.stopPropagation(); rnParkCategory('${escAttr(cat)}')" title="Park this category">P</button>
+                        </div>`;
+                    }).join('')}
+                    ${data.cc_sessions.length > 0 ? `
+                    <div class="rn-sidebar-item" data-cat="__cc__" onclick="rnSelectCategory('__cc__')">
+                        <span class="cat-dot" style="background: #D97706;"></span>
+                        <span class="rn-cat-name">CC Sessions</span>
+                        <span class="rn-cat-count">${data.cc_sessions.length}</span>
+                    </div>` : ''}
+                </div>
+
+                <!-- Right: detail pane -->
+                <div class="rn-detail" id="rn-detail">
+                </div>
+            </div>
+        </div>`;
+
+        content.innerHTML = html;
+        // Show default summary
+        rnSelectCategory('__all__');
+    }
+
+    function rnSelectCategory(cat) {
+        if (!_rnData) return;
+        // Update sidebar selection
+        document.querySelectorAll('.rn-sidebar-item').forEach(el => {
+            el.classList.toggle('selected', el.dataset.cat === cat);
+        });
+
+        const detail = document.getElementById('rn-detail');
+        if (!detail) return;
+
+        if (cat === '__all__') {
+            rnShowSummary(detail);
+        } else if (cat === '__cc__') {
+            rnShowCCSessions(detail);
+        } else {
+            rnShowCategoryTabs(detail, cat);
+        }
+    }
+
+    function rnShowSummary(detail) {
+        const data = _rnData;
+        const cats = Object.entries(data.tabs_by_category)
+            .sort((a, b) => b[1].length - a[1].length);
+
+        // Top 5 categories as mini-cards with 3 sample tabs each
+        let html = '';
+
+        // Stale warning at top
+        if (data.stale_count > 0) {
+            html += `
+            <div class="rn-summary-card" style="border-color: rgba(239, 68, 68, 0.3);">
+                <div class="rn-summary-header" style="color: #f87171;">
+                    &#9888; ${data.stale_count} Stale Tabs — Safe to Close
+                </div>
+                ${data.stale_tabs.slice(0, 5).map(t => `
+                <div class="tab-row stale" style="padding: 4px 8px;">
+                    <span class="stale-badge">${escHtml(t.stale_reason || 'stale')}</span>
+                    <span class="tab-title">${escHtml(t.title || t.url)}</span>
+                </div>`).join('')}
+                ${data.stale_tabs.length > 5 ? `<p class="text-xs" style="color: var(--text-muted); padding: 4px 8px;">+ ${data.stale_tabs.length - 5} more</p>` : ''}
+            </div>`;
+        }
+
+        for (const [cat, tabs] of cats.slice(0, 6)) {
+            const color = categoryColors[cat] || '#9CA3AF';
+            const sample = tabs.slice(0, 3);
+            html += `
+            <div class="rn-summary-card" style="cursor: pointer;" onclick="rnSelectCategory('${escAttr(cat)}')">
+                <div class="rn-summary-header">
+                    <span class="cat-dot" style="background: ${color};"></span>
+                    ${escHtml(cat)}
+                    <span class="rn-cat-count" style="margin-left: auto;">${tabs.length}</span>
+                </div>
+                ${sample.map(t => `
+                <div class="tab-row" style="padding: 4px 8px;">
+                    <a href="${escAttr(t.url)}" target="_blank" class="tab-title" style="color: var(--text-primary); text-decoration: none; font-size: 12px;"
+                       onmouseover="this.style.color='${color}'" onmouseout="this.style.color='var(--text-primary)'"
+                       onclick="event.stopPropagation()">
+                        ${escHtml(t.title || t.url)}
+                    </a>
+                    <span class="tab-domain">${escHtml(t.domain)}</span>
+                </div>`).join('')}
+                ${tabs.length > 3 ? `<p class="text-xs" style="color: var(--text-muted); padding: 4px 8px;">+ ${tabs.length - 3} more</p>` : ''}
+            </div>`;
+        }
+
+        detail.innerHTML = html;
+    }
+
+    function rnShowCategoryTabs(detail, cat) {
+        const data = _rnData;
+        const tabs = data.tabs_by_category[cat] || [];
+        const color = categoryColors[cat] || '#9CA3AF';
+
+        let html = `
+        <div class="rn-detail-header">
+            <h3>
+                <span class="cat-dot" style="background: ${color};"></span>
+                ${escHtml(cat)} <span style="font-weight: 400; color: var(--text-muted);">(${tabs.length})</span>
+            </h3>
+            <button class="rn-park-all-btn" onclick="rnParkCategory('${escAttr(cat)}')">Park All</button>
+        </div>`;
+
+        for (const t of tabs) {
+            html += `
+            <div class="tab-row ${t.is_stale ? 'stale' : ''}">
+                <span class="cat-dot" style="background: ${color}; opacity: 0.5;"></span>
+                <a href="${escAttr(t.url)}" target="_blank" class="tab-title" style="color: var(--text-primary); text-decoration: none;"
+                   onmouseover="this.style.color='${color}'" onmouseout="this.style.color='var(--text-primary)'">
+                    ${escHtml(t.title || t.url)}
+                </a>
+                <span class="tab-domain">${escHtml(t.domain)}</span>
+                ${t.is_stale ? `<span class="stale-badge">${escHtml(t.stale_reason || 'stale')}</span>` : ''}
+            </div>`;
+        }
+
+        detail.innerHTML = html;
+    }
+
+    function rnShowCCSessions(detail) {
+        const data = _rnData;
+        let html = `
+        <div class="rn-detail-header">
+            <h3>
+                <span class="cat-dot" style="background: #D97706;"></span>
+                Claude Code Sessions <span style="font-weight: 400; color: var(--text-muted);">(${data.cc_sessions.length})</span>
+            </h3>
+        </div>`;
+
+        for (const s of data.cc_sessions) {
+            html += `
+            <div class="session-row">
+                <span class="cat-dot" style="background: #D97706; opacity: 0.5; margin-top: 5px;"></span>
+                <div style="flex: 1; min-width: 0;">
+                    <div class="text-sm" style="color: var(--text-primary);">${escHtml(s.summary || s.first_prompt || 'Untitled session')}</div>
+                    <div class="text-xs mt-1" style="color: var(--text-muted);">
+                        ${escHtml(s.project_name)} &middot; ${s.message_count || '?'} msgs
+                        ${s.git_branch ? ` &middot; ${escHtml(s.git_branch)}` : ''}
+                        ${s.model ? ` &middot; ${escHtml(s.model)}` : ''}
+                    </div>
+                </div>
+                <span class="cat-badge" style="background: rgba(217, 119, 6, 0.1); color: #D97706;">
+                    ${escHtml(s.category)}
+                </span>
+            </div>`;
+        }
+
+        detail.innerHTML = html;
+    }
+
+    async function rnParkCategory(cat) {
+        if (!_rnData) return;
+        const tabs = _rnData.tabs_by_category[cat];
+        if (!tabs || tabs.length === 0) return;
+
+        const urls = tabs.map(t => ({ url: t.url, title: t.title, domain: t.domain, category: t.category }));
+        await api('/api/park', {
+            method: 'POST',
+            body: JSON.stringify({ name: cat, note: `Parked from Right Now`, urls }),
+        });
+        toast(`Parked ${urls.length} tabs from "${cat}"`);
+    }
+
+    // ─── Today ────────────────────────────────────────────
+    async function loadToday() {
+        const data = await api('/api/today');
+        const content = document.getElementById('content');
+
+        // Also fetch digest
+        const today = new Date().toISOString().split('T')[0];
+        let digest = null;
+        try { digest = await api(`/api/digest/${today}`); } catch(e) {}
+
+        let html = `
+        <div class="fade-in">
+            <div class="grid grid-cols-4 gap-4 mb-6">
+                <div class="card stat-card">
+                    <div class="stat-value">${data.snapshot_count}</div>
+                    <div class="stat-label">Snapshots</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-value">${data.peak_tabs}</div>
+                    <div class="stat-label">Peak Tabs</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-value">${data.session_count}</div>
+                    <div class="stat-label">CC Sessions</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-value">${data.total_messages}</div>
+                    <div class="stat-label">Total Messages</div>
+                </div>
+            </div>
+
+            ${digest && digest.digest_markdown ? `
+            <div class="digest-block mb-6">${escHtml(digest.digest_markdown)}</div>
+            ` : ''}
+
+            <!-- Top categories -->
+            <div class="card mb-6">
+                <h3 class="text-sm font-semibold mb-3" style="color: var(--text-secondary);">Top Categories</h3>
+                ${data.top_categories.map(c => {
+                    const color = categoryColors[c.category] || '#9CA3AF';
+                    return `
+                    <div class="flex items-center gap-3 mb-2">
+                        <span class="cat-dot" style="background: ${color};"></span>
+                        <span class="text-sm" style="flex: 1;">${escHtml(c.category)}</span>
+                        <span class="text-sm" style="color: var(--text-muted);">${c.count} tabs</span>
+                        <div style="width: 120px; height: 4px; background: var(--bg-hover); border-radius: 2px; overflow: hidden;">
+                            <div style="width: ${Math.min(100, (c.count / (data.top_categories[0]?.count || 1)) * 100)}%; height: 100%; background: ${color}; border-radius: 2px;"></div>
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
+
+            <!-- CC Sessions -->
+            ${data.cc_sessions.length > 0 ? `
+            <div class="card">
+                <h3 class="text-sm font-semibold mb-3" style="color: var(--text-secondary);">Claude Code Sessions</h3>
+                ${data.cc_sessions.map(s => `
+                <div class="session-row">
+                    <div class="pulse-dot" style="margin-top: 5px; background: #D97706;"></div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div class="text-sm">${escHtml(s.summary || s.first_prompt || 'Untitled')}</div>
+                        <div class="text-xs mt-1" style="color: var(--text-muted);">
+                            ${escHtml(s.project_name)} &middot; ${s.message_count || '?'} msgs
+                            ${s.started_at ? ` &middot; ${new Date(s.started_at).toLocaleTimeString()}` : ''}
+                        </div>
+                    </div>
+                    <span class="cat-badge" style="background: rgba(217, 119, 6, 0.1); color: #D97706;">
+                        ${escHtml(s.category)}
+                    </span>
+                </div>
+                `).join('')}
+            </div>
+            ` : ''}
+        </div>`;
+
+        content.innerHTML = html;
+    }
+
+    // ─── Search (What Was I Doing?) ───────────────────────
+    function loadSearch() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+        <div class="fade-in">
+            <div class="relative mb-6">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted);">
+                    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                </svg>
+                <input type="text" id="search-input" class="search-input"
+                       placeholder="On Tuesday night I was looking at something about..."
+                       onkeydown="if(event.key==='Enter')doSearch()">
+            </div>
+            <div class="flex gap-3 mb-6 flex-wrap">
+                <select id="search-category" class="nav-tab text-xs" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);">
+                    <option value="">All categories</option>
+                    ${Object.keys(categoryColors).map(c => `<option value="${escAttr(c)}">${escHtml(c)}</option>`).join('')}
+                </select>
+                <input type="date" id="search-from" class="nav-tab text-xs" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);">
+                <input type="date" id="search-to" class="nav-tab text-xs" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);">
+                <button onclick="doSearch()" class="nav-tab text-xs" style="background: var(--accent); color: #000; font-weight: 600;">Search</button>
+            </div>
+            <div id="search-results"></div>
+        </div>`;
+
+        document.getElementById('search-input').focus();
+    }
+
+    async function doSearch() {
+        const q = document.getElementById('search-input').value.trim();
+        const category = document.getElementById('search-category').value;
+        const dateFrom = document.getElementById('search-from').value;
+        const dateTo = document.getElementById('search-to').value;
+        if (!q && !category && !dateFrom && !dateTo) return;
+
+        let url = `/api/search?q=${encodeURIComponent(q)}`;
+        if (category) url += `&category=${encodeURIComponent(category)}`;
+        if (dateFrom) url += `&date_from=${dateFrom}`;
+        if (dateTo) url += `&date_to=${dateTo}`;
+
+        const results = document.getElementById('search-results');
+        results.innerHTML = '<div class="flex justify-center py-8"><div class="spinner"></div></div>';
+
+        const data = await api(url);
+
+        let html = '';
+
+        if (data.tabs.length === 0 && data.cc_sessions.length === 0) {
+            html = `<div class="card text-center py-12"><p style="color: var(--text-muted);">No results found${q ? ' for "' + escHtml(q) + '"' : ''}</p></div>`;
+        } else {
+            // Tabs
+            if (data.tabs.length > 0) {
+                html += `
+                <div class="category-group">
+                    <div class="category-header">Browser Tabs <span class="category-count">${data.tabs.length}</span></div>
+                    ${data.tabs.map(t => {
+                        const color = categoryColors[t.category] || '#9CA3AF';
+                        return `
+                        <div class="tab-row">
+                            <span class="cat-dot" style="background: ${color};"></span>
+                            <a href="${escAttr(t.url)}" target="_blank" class="tab-title" style="color: var(--text-primary); text-decoration: none;"
+                               onmouseover="this.style.color='${color}'" onmouseout="this.style.color='var(--text-primary)'">
+                                ${escHtml(t.title || t.url)}
+                            </a>
+                            <span class="tab-domain">${escHtml(t.domain)}</span>
+                            <span class="text-xs" style="color: var(--text-muted);">${t.taken_at ? new Date(t.taken_at).toLocaleDateString() : ''}</span>
+                        </div>`;
+                    }).join('')}
+                </div>`;
+            }
+
+            // CC Sessions
+            if (data.cc_sessions.length > 0) {
+                html += `
+                <div class="category-group mt-4">
+                    <div class="category-header">
+                        <span class="cat-dot" style="background: #D97706;"></span>
+                        Claude Code Sessions <span class="category-count">${data.cc_sessions.length}</span>
+                    </div>
+                    ${data.cc_sessions.map(s => `
+                    <div class="session-row">
+                        <span class="cat-dot" style="background: #D97706; opacity: 0.5; margin-top: 5px;"></span>
+                        <div style="flex: 1; min-width: 0;">
+                            <div class="text-sm">${escHtml(s.summary || s.first_prompt || 'Untitled')}</div>
+                            <div class="text-xs mt-1" style="color: var(--text-muted);">
+                                ${escHtml(s.project_name)} &middot; ${s.message_count || '?'} msgs
+                                ${s.started_at ? ` &middot; ${new Date(s.started_at).toLocaleDateString()}` : ''}
+                                ${s.git_branch ? ` &middot; ${escHtml(s.git_branch)}` : ''}
+                            </div>
+                        </div>
+                        <span class="cat-badge" style="background: rgba(217, 119, 6, 0.1); color: #D97706;">
+                            ${escHtml(s.category)}
+                        </span>
+                    </div>
+                    `).join('')}
+                </div>`;
+            }
+        }
+
+        results.innerHTML = html;
+    }
+
+    // ─── History ──────────────────────────────────────────
+    async function loadHistory() {
+        const data = await api('/api/history?days=14');
+        const content = document.getElementById('content');
+
+        const days = Object.entries(data.daily_summary)
+            .sort((a, b) => b[0].localeCompare(a[0]));
+
+        let html = `
+        <div class="fade-in">
+            <div class="card mb-6">
+                <h3 class="text-sm font-semibold mb-4" style="color: var(--text-secondary);">Last 14 Days</h3>
+                <div class="flex items-end gap-2" style="height: 120px;">
+                    ${days.map(([day, info]) => {
+                        const maxPeak = Math.max(...days.map(d => d[1].peak_tabs), 1);
+                        const height = Math.max(4, (info.peak_tabs / maxPeak) * 100);
+                        const isToday = day === new Date().toISOString().split('T')[0];
+                        return `
+                        <div class="flex flex-col items-center gap-1" style="flex: 1;">
+                            <span class="text-xs" style="color: var(--text-muted);">${info.peak_tabs}</span>
+                            <div style="width: 100%; height: ${height}px; background: ${isToday ? 'var(--accent)' : 'var(--border)'}; border-radius: 3px; cursor: pointer;"
+                                 title="${day}: ${info.peak_tabs} peak tabs, ${info.snapshots} snapshots"
+                                 onclick="viewSnapshotDay('${day}')"></div>
+                            <span class="text-xs" style="color: var(--text-muted);">${day.slice(5)}</span>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>
+
+            <!-- Snapshot list -->
+            <div class="card">
+                <h3 class="text-sm font-semibold mb-3" style="color: var(--text-secondary);">Recent Snapshots</h3>
+                ${data.snapshots.slice(0, 30).map(s => `
+                <div class="tab-row card-hover" onclick="viewSnapshot(${s.id})" style="cursor: pointer;">
+                    <span class="text-xs" style="color: var(--text-muted); width: 80px;">${new Date(s.taken_at).toLocaleDateString()}</span>
+                    <span class="text-xs" style="color: var(--text-muted); width: 60px;">${new Date(s.taken_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</span>
+                    <span class="text-sm" style="flex: 1;">${s.tab_count} tabs</span>
+                    <span class="cat-badge" style="background: var(--bg-hover); color: var(--text-secondary);">${s.source}</span>
+                    ${s.note ? `<span class="text-xs" style="color: var(--text-muted);">${escHtml(s.note)}</span>` : ''}
+                </div>
+                `).join('')}
+            </div>
+        </div>`;
+
+        content.innerHTML = html;
+    }
+
+    async function viewSnapshot(id) {
+        const data = await api(`/api/snapshot/${id}`);
+        const content = document.getElementById('content');
+
+        const snap = data.snapshot;
+        let html = `
+        <div class="fade-in">
+            <button onclick="loadView('history')" class="nav-tab text-xs mb-4">&larr; Back to History</button>
+            <h2 class="text-sm font-semibold mb-4" style="color: var(--text-secondary);">
+                Snapshot #${snap.id} &middot; ${new Date(snap.taken_at).toLocaleString()} &middot; ${snap.tab_count} tabs
+                ${snap.note ? ` &middot; ${escHtml(snap.note)}` : ''}
+            </h2>
+        `;
+
+        // Group by category
+        const grouped = {};
+        for (const t of data.tabs) {
+            if (!grouped[t.category]) grouped[t.category] = [];
+            grouped[t.category].push(t);
+        }
+
+        for (const [cat, tabs] of Object.entries(grouped).sort((a, b) => b[1].length - a[1].length)) {
+            const color = categoryColors[cat] || '#9CA3AF';
+            html += `
+            <div class="category-group">
+                <div class="category-header">
+                    <span class="cat-dot" style="background: ${color};"></span>
+                    ${escHtml(cat)}
+                    <span class="category-count">${tabs.length}</span>
+                </div>
+                ${tabs.map(t => `
+                <div class="tab-row">
+                    <a href="${escAttr(t.url)}" target="_blank" class="tab-title" style="color: var(--text-primary); text-decoration: none;">
+                        ${escHtml(t.title || t.url)}
+                    </a>
+                    <span class="tab-domain">${escHtml(t.domain)}</span>
+                </div>
+                `).join('')}
+            </div>`;
+        }
+
+        html += `</div>`;
+        content.innerHTML = html;
+    }
+
+    // ─── Parking Lot ──────────────────────────────────────
+    async function loadParking() {
+        const data = await api('/api/parked');
+        const content = document.getElementById('content');
+
+        let html = `
+        <div class="fade-in">
+            <!-- Park new group form -->
+            <div class="card mb-6">
+                <h3 class="text-sm font-semibold mb-3" style="color: var(--text-secondary);">Park Tabs for Later</h3>
+                <div class="flex gap-3 mb-3">
+                    <input type="text" id="park-name" class="search-input" placeholder="Group name (e.g., Keyboard shopping)" style="padding-left: 14px;">
+                </div>
+                <div class="flex gap-3">
+                    <input type="text" id="park-note" class="search-input" style="padding-left: 14px;" placeholder="Optional note...">
+                    <textarea id="park-urls" class="search-input" rows="3" placeholder="Paste URLs (one per line)" style="padding-left: 14px; resize: vertical;"></textarea>
+                </div>
+                <button onclick="parkTabs()" class="nav-tab text-xs mt-3" style="background: var(--accent); color: #000; font-weight: 600;">
+                    Park These Tabs
+                </button>
+            </div>
+
+            <!-- Parked groups -->
+            <h3 class="text-sm font-semibold mb-3" style="color: var(--text-secondary);">
+                Parked Groups ${data.length > 0 ? `<span class="category-count">${data.length}</span>` : ''}
+            </h3>
+        `;
+
+        if (data.length === 0) {
+            html += `<div class="card text-center py-12"><p style="color: var(--text-muted);">No parked tabs yet. Save groups of tabs to come back to later.</p></div>`;
+        } else {
+            for (const group of data) {
+                html += `
+                <div class="parked-group fade-in">
+                    <div class="flex items-center justify-between mb-2">
+                        <div>
+                            <span class="text-sm font-semibold">${escHtml(group.name)}</span>
+                            <span class="text-xs ml-2" style="color: var(--text-muted);">${group.tab_count} tabs &middot; ${new Date(group.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="reopenParked(${group.id})" class="nav-tab text-xs" style="color: #22c55e;">&#8599; Reopen All</button>
+                            <button onclick="deleteParked(${group.id})" class="nav-tab text-xs" style="color: #f87171;">&#10005;</button>
+                        </div>
+                    </div>
+                    ${group.note ? `<p class="text-xs mb-2" style="color: var(--text-muted);">${escHtml(group.note)}</p>` : ''}
+                    ${group.tabs.map(t => {
+                        const color = categoryColors[t.category] || '#9CA3AF';
+                        return `
+                        <div class="tab-row">
+                            <span class="cat-dot" style="background: ${color};"></span>
+                            <a href="${escAttr(t.url)}" target="_blank" class="tab-title" style="color: var(--text-primary); text-decoration: none;">
+                                ${escHtml(t.title || t.url)}
+                            </a>
+                            <span class="tab-domain">${escHtml(t.domain)}</span>
+                        </div>`;
+                    }).join('')}
+                </div>`;
+            }
+        }
+
+        html += `</div>`;
+        content.innerHTML = html;
+    }
+
+    async function parkTabs() {
+        const name = document.getElementById('park-name').value.trim();
+        const note = document.getElementById('park-note').value.trim();
+        const urlsText = document.getElementById('park-urls').value.trim();
+
+        if (!name) { toast('Enter a group name'); return; }
+        if (!urlsText) { toast('Paste some URLs'); return; }
+
+        const urls = urlsText.split('\n').filter(u => u.trim()).map(u => u.trim());
+
+        await api('/api/park', {
+            method: 'POST',
+            body: JSON.stringify({ name, note, urls: urls.map(url => ({ url })) }),
+        });
+
+        toast(`Parked ${urls.length} tabs as "${name}"`);
+        loadParking();
+    }
+
+    async function reopenParked(groupId) {
+        const data = await api(`/api/parked/${groupId}/reopen`, { method: 'POST' });
+        // Open all URLs
+        for (const url of data.urls) {
+            window.open(url, '_blank');
+        }
+        toast(`Reopened ${data.urls.length} tabs`);
+        loadParking();
+    }
+
+    async function deleteParked(groupId) {
+        if (!confirm('Delete this parked group?')) return;
+        await api(`/api/parked/${groupId}`, { method: 'DELETE' });
+        toast('Group deleted');
+        loadParking();
+    }
+
+    // ─── Actions ──────────────────────────────────────────
+    async function takeSnapshot() {
+        toast('Taking snapshot...');
+        const result = await api('/api/snapshot', { method: 'POST' });
+        toast(`Snapshot #${result.snapshot_id}: ${result.tab_count} tabs captured`);
+        if (currentView === 'right-now') loadRightNow();
+    }
+
+    async function reindexCC() {
+        toast('Re-indexing Claude Code sessions...');
+        const result = await api('/api/reindex', { method: 'POST' });
+        toast(`Indexed ${result.new} new sessions (${result.total} total)`);
+        if (currentView === 'right-now' || currentView === 'today') loadView(currentView);
+    }
+
+    // ─── Utilities ────────────────────────────────────────
+    async function api(url, opts = {}) {
+        const resp = await fetch(url, {
+            headers: { 'Content-Type': 'application/json' },
+            ...opts,
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return resp.json();
+    }
+
+    function escHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = String(str);
+        return div.innerHTML;
+    }
+
+    function escAttr(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function toast(msg) {
+        const container = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        el.className = 'toast';
+        el.textContent = msg;
+        container.appendChild(el);
+        setTimeout(() => el.remove(), 3000);
+    }
+
+    function viewSnapshotDay(day) {
+        // Switch to search pre-filtered by date, then auto-search
+        switchView('search');
+        setTimeout(() => {
+            document.getElementById('search-from').value = day;
+            document.getElementById('search-to').value = day;
+            doSearch();
+        }, 100);
+    }
+
+    // ─── Init ─────────────────────────────────────────────
+    loadView('right-now');
+    </script>
+</body>
+</html>
