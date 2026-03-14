@@ -7,7 +7,7 @@ It does NOT modify ledger.db — the KB is a separate, enriched view of the data
 import sqlite3
 from pathlib import Path
 
-KB_DB = Path.home() / ".tab-ledger" / "knowledge_base.db"
+from ._paths import KB_DB  # noqa: E402 — centralized in _paths.py
 
 
 def get_kb_db(readonly: bool = False) -> sqlite3.Connection:

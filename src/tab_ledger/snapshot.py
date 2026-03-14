@@ -12,11 +12,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
-from categorizer import categorize_url, check_stale, get_domain
+from .categorizer import categorize_url, check_stale, get_domain
 
-COMET_HISTORY = Path.home() / "Library/Application Support/Comet/Default/History"
-COMET_SESSIONS = Path.home() / "Library/Application Support/Comet/Default/Sessions"
-LEDGER_DB = Path.home() / ".tab-ledger/ledger.db"
+from ._paths import COMET_HISTORY, COMET_SESSIONS, LEDGER_DB
+
+
 
 # Chromium epoch: Jan 1, 1601 — microseconds
 CHROMIUM_EPOCH_DELTA = 11644473600 * 1_000_000

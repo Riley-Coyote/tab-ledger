@@ -31,7 +31,7 @@ def stage_0_schema(drop: bool = False):
     print("\n" + "=" * 60)
     print("STAGE 0: SCHEMA CREATION")
     print("=" * 60)
-    from kb_schema import create_schema, verify_schema
+    from .kb_schema import create_schema, verify_schema
     create_schema(drop_existing=drop)
     counts = verify_schema()
     print(f"\nVerification: {len(counts)} tables created")
@@ -45,7 +45,7 @@ def stage_1_taxonomy():
     print("\n" + "=" * 60)
     print("STAGE 1: PROJECT TAXONOMY & SESSION IMPORT")
     print("=" * 60)
-    from kb_taxonomy import build_taxonomy
+    from .kb_taxonomy import build_taxonomy
     build_taxonomy()
 
 
@@ -54,7 +54,7 @@ def stage_2_messages():
     print("\n" + "=" * 60)
     print("STAGE 2: MESSAGE INDEXING")
     print("=" * 60)
-    from kb_indexer import index_all_messages
+    from .kb_indexer import index_all_messages
     result = index_all_messages(resume=True)
     print(f"\nResult: {result}")
 
@@ -64,7 +64,7 @@ def stage_3_fts():
     print("\n" + "=" * 60)
     print("STAGE 3: FTS INDEX BUILD")
     print("=" * 60)
-    from kb_schema import get_kb_db
+    from .kb_schema import get_kb_db
     kb = get_kb_db()
 
     # Update progress
@@ -162,7 +162,7 @@ def stage_4_summarize():
     print("\n" + "=" * 60)
     print("STAGE 4: SUMMARIZATION (API calls)")
     print("=" * 60)
-    from kb_summarizer import run_summarization
+    from .kb_summarizer import run_summarization
     result = run_summarization(batch_size=20, resume=True)
     print(f"\nResult: {result}")
 
@@ -172,7 +172,7 @@ def stage_5_linking():
     print("\n" + "=" * 60)
     print("STAGE 5: CROSS-SESSION LINKING")
     print("=" * 60)
-    from kb_linker import build_all_connections
+    from .kb_linker import build_all_connections
     result = build_all_connections()
     print(f"\nResult: {result}")
 
@@ -182,7 +182,7 @@ def stage_6_auxiliary():
     print("\n" + "=" * 60)
     print("STAGE 6: AUXILIARY DATA INDEXING")
     print("=" * 60)
-    from kb_auxiliary import index_all_auxiliary
+    from .kb_auxiliary import index_all_auxiliary
     result = index_all_auxiliary()
     print(f"\nResult: {result}")
 
@@ -192,7 +192,7 @@ def stage_7_verify():
     print("\n" + "=" * 60)
     print("STAGE 7: VERIFICATION")
     print("=" * 60)
-    from kb_schema import get_kb_db
+    from .kb_schema import get_kb_db
 
     kb = get_kb_db(readonly=True)
 
@@ -277,7 +277,7 @@ def stage_7_verify():
     print(f"  Todos:        {todo_count}")
 
     # DB file size
-    db_path = Path.home() / ".tab-ledger" / "knowledge_base.db"
+    from ._paths import KB_DB as db_path
     if db_path.exists():
         size_mb = db_path.stat().st_size / (1024 * 1024)
         print(f"  DB size:      {size_mb:.1f} MB")
@@ -306,8 +306,8 @@ def stage_8_semantic(provider: str, model: str | None = None, include_messages: 
     print("\n" + "=" * 60)
     print("STAGE 8: SEMANTIC INDEXING")
     print("=" * 60)
-    from kb_schema import get_kb_db
-    from kb_semantic import create_embedding_provider, build_semantic_index
+    from .kb_schema import get_kb_db
+    from .kb_semantic import create_embedding_provider, build_semantic_index
 
     kb = get_kb_db()
     try:
@@ -374,7 +374,8 @@ Optional:
     print("║     CLAUDE CODE MASTER KNOWLEDGE BASE — BUILDER        ║")
     print("╚══════════════════════════════════════════════════════════╝")
     print(f"  Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"  DB path: {Path.home() / '.tab-ledger' / 'knowledge_base.db'}")
+    from ._paths import KB_DB
+    print(f"  DB path: {KB_DB}")
 
     start_time = time.time()
 

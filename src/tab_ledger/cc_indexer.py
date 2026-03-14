@@ -12,10 +12,10 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-from categorizer import categorize_cc_session
+from .categorizer import categorize_cc_session
 
-CLAUDE_PROJECTS = Path.home() / ".claude/projects"
-LEDGER_DB = Path.home() / ".tab-ledger/ledger.db"
+from ._paths import CLAUDE_PROJECTS, LEDGER_DB
+
 
 # Token pricing per million tokens (as of Feb 2026)
 # https://docs.anthropic.com/en/docs/about-claude/models
@@ -442,7 +442,7 @@ if __name__ == "__main__":
     parser.add_argument("--force", action="store_true", help="Re-index all sessions, not just new ones")
     args = parser.parse_args()
 
-    from snapshot import init_db
+    from .snapshot import init_db
     init_db()
     result = index_all(force=args.force)
     print(f"\nDone. {result['total']} total sessions indexed.")

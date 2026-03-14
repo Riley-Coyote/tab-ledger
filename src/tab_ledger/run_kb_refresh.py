@@ -11,54 +11,53 @@ import time
 from datetime import datetime
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def main():
     start = time.time()
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] KB refresh starting...")
 
     # Stage 0: Ensure schema exists (no-op if already there)
-    from kb_schema import create_schema
+    from .kb_schema import create_schema
     create_schema(drop_existing=False)
 
     # Stage 1: Taxonomy + session import (picks up new sessions from ledger.db)
     print("\n--- Stage 1: Taxonomy & Session Import ---")
-    from kb_taxonomy import build_taxonomy
+    from .kb_taxonomy import build_taxonomy
     build_taxonomy()
 
     # Stage 2: Message indexing (indexes new JSONL messages)
     print("\n--- Stage 2: Message Indexing ---")
-    from kb_indexer import index_all_messages
+    from .kb_indexer import index_all_messages
     index_all_messages(resume=True)
 
     # Stage 3: FTS rebuild — clear and rebuild to include new content
     print("\n--- Stage 3: FTS Rebuild ---")
-    from kb_schema import get_kb_db
+    from .kb_schema import get_kb_db
     kb = get_kb_db()
     # Delete existing FTS entries so we can rebuild with new content
     kb.execute("DELETE FROM kb_fts")
     kb.commit()
     kb.close()
     # Now run the FTS build stage
-    from kb_build import stage_3_fts
+    from .kb_build import stage_3_fts
     stage_3_fts()
 
     # Stage 5: Cross-session linking
     print("\n--- Stage 5: Linking ---")
-    from kb_linker import build_all_connections
+    from .kb_linker import build_all_connections
     build_all_connections()
 
     # Stage 6: Auxiliary data
     print("\n--- Stage 6: Auxiliary ---")
-    from kb_auxiliary import index_all_auxiliary
+    from .kb_auxiliary import index_all_auxiliary
     index_all_auxiliary()
 
     # Optional Stage 8: Semantic embeddings
     semantic_provider = os.getenv("KB_SEMANTIC_PROVIDER", "").strip().lower()
     if semantic_provider:
         print("\n--- Stage 8: Semantic Indexing ---")
-        from kb_schema import get_kb_db
-        from kb_semantic import create_embedding_provider, build_semantic_index
+        from .kb_schema import get_kb_db
+        from .kb_semantic import create_embedding_provider, build_semantic_index
 
         embedder = create_embedding_provider(
             semantic_provider,

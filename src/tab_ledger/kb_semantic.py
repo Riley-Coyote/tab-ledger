@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from kb_schema import get_kb_db
+from .kb_schema import get_kb_db
 
 
 DEFAULT_OLLAMA_MODEL = "nomic-embed-text"

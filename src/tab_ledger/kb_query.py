@@ -18,7 +18,7 @@ CLI usage:
     python3 kb_query.py stats [--project <name>] [--human]
 
 Python API:
-    from kb_query import KnowledgeBase
+    from .kb_query import KnowledgeBase
     kb = KnowledgeBase()
     results = kb.search("websocket authentication")
     project = kb.get_project("vessel")
@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from textwrap import fill
 
-from kb_schema import get_kb_db, KB_DB
+from .kb_schema import get_kb_db, KB_DB
 
 
 class KnowledgeBase:
@@ -390,7 +390,7 @@ class KnowledgeBase:
         min_score: float = 0.18,
     ) -> List[Dict[str, Any]]:
         """Semantic search across indexed memory artifacts."""
-        from kb_semantic import create_embedding_provider, semantic_search as semantic_search_impl
+        from .kb_semantic import create_embedding_provider, semantic_search as semantic_search_impl
 
         if not self._semantic_table_exists():
             return []
@@ -658,7 +658,7 @@ class KnowledgeBase:
         model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Build a continuity packet for natural memory persistence."""
-        from kb_memory import build_memory_packet
+        from .kb_memory import build_memory_packet
 
         return build_memory_packet(
             self,

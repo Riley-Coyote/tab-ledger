@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional
 import logging
 
-from kb_schema import get_kb_db
+from .kb_schema import get_kb_db
 
 # Configure logging
 logging.basicConfig(
@@ -21,7 +21,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-CLAUDE_PROJECTS = Path.home() / ".claude" / "projects"
+from ._paths import CLAUDE_PROJECTS
 PROGRESS_STAGE = "linking"
 
 

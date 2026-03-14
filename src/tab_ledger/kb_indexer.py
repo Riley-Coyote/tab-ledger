@@ -20,11 +20,11 @@ from pathlib import Path
 from typing import Generator, Optional, Tuple, Dict, Any
 from datetime import datetime
 
-from kb_schema import get_kb_db
-from kb_taxonomy import map_session
+from .kb_schema import get_kb_db
+from .kb_taxonomy import map_session
 
 
-CLAUDE_PROJECTS = Path.home() / ".claude" / "projects"
+from ._paths import CLAUDE_PROJECTS
 
 
 def find_all_jsonl() -> Generator[Tuple[Path, str], None, None]:

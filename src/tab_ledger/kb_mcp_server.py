@@ -9,9 +9,8 @@ import sys
 from pathlib import Path
 
 # Add tab-ledger to path so we can import kb_query
-sys.path.insert(0, str(Path(__file__).parent))
 
-from kb_query import KnowledgeBase
+from .kb_query import KnowledgeBase
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool

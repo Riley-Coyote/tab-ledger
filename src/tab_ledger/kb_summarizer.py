@@ -29,7 +29,7 @@ import subprocess
 
 import os as _os
 
-from kb_schema import get_kb_db
+from .kb_schema import get_kb_db
 
 
 def _claude_env():
@@ -678,7 +678,7 @@ def _find_jsonl_for_session(
     Session's jsonl_path field may not be populated yet, so search across all
     project directories matching the session_uuid filename stem.
     """
-    claude_projects = Path.home() / ".claude" / "projects"
+    from ._paths import CLAUDE_PROJECTS as claude_projects
 
     if not claude_projects.exists():
         logger.warning(f"Claude projects directory not found: {claude_projects}")

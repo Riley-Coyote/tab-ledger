@@ -9,9 +9,9 @@ import sqlite3
 from pathlib import Path
 from datetime import datetime
 
-from kb_schema import get_kb_db, KB_DB
+from .kb_schema import get_kb_db, KB_DB
 
-LEDGER_DB = Path.home() / ".tab-ledger" / "ledger.db"
+from ._paths import LEDGER_DB
 
 # ═══════════════════════════════════════════════════════
 # PROJECT DEFINITIONS

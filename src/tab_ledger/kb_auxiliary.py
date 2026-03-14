@@ -18,19 +18,19 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Tuple
 
-from kb_schema import get_kb_db
-from kb_taxonomy import map_session
+from .kb_schema import get_kb_db
+from .kb_taxonomy import map_session
 
 
 # ═══════════════════════════════════════════════════════
 # CONSTANTS
 # ═══════════════════════════════════════════════════════
 
-HISTORY_FILE = Path.home() / ".claude" / "history.jsonl"
-PLANS_DIR = Path.home() / ".claude" / "plans"
-TODOS_DIR = Path.home() / ".claude" / "todos"
-TEAMS_DIR = Path.home() / ".claude" / "teams"
-CLAUDE_AI_DB = Path.home() / ".claude_history_search" / "conversations.db"
+from ._paths import HISTORY_FILE, PLANS_DIR, TODOS_DIR, TEAMS_DIR, CLAUDE_AI_DB
+
+
+
+
 
 
 # ═══════════════════════════════════════════════════════

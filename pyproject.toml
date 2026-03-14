@@ -1,3 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tab-ledger"
+version = "0.1.0"
+description = "Local-first analytics and knowledge base for Claude Code sessions"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Riley Coyote" },
+]
+keywords = ["claude-code", "analytics", "knowledge-base", "mcp", "agent-tools"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "jinja2>=3.0",
+    "python-multipart>=0.0.5",
+    "mcp>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Riley-Coyote/tab-ledger"
+Repository = "https://github.com/Riley-Coyote/tab-ledger"
+
+[project.scripts]
+tab-ledger = "tab_ledger.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tab_ledger"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

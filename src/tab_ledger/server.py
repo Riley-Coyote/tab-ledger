@@ -13,10 +13,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
 
-from snapshot import init_db, take_snapshot, LEDGER_DB
-from cc_indexer import index_all
-from categorizer import get_category_colors
-from kb_query import KnowledgeBase
+from .snapshot import init_db, take_snapshot, LEDGER_DB
+from .cc_indexer import index_all
+from .categorizer import get_category_colors
+from .kb_query import KnowledgeBase
 
 app = FastAPI(title="Tab Ledger")
 
@@ -803,4 +803,4 @@ async def startup():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("server:app", host="127.0.0.1", port=7777, reload=True)
+    uvicorn.run("tab_ledger.server:app", host="127.0.0.1", port=7777, reload=True)
