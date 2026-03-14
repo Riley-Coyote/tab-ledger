@@ -23,156 +23,46 @@ from ._paths import LEDGER_DB
 # ORDERING RULES:
 # 1. Within each project's sub_projects, more specific paths MUST come first
 # 2. Projects with overlapping paths must be ordered carefully
-#    (e.g., Sanctuary sub-projects before Sanctuary root)
+#    (e.g., project sub-paths before project root)
+
+# ─────────────────────────────────────────────────────
+# SAMPLE TAXONOMY — Customize this for your projects.
+#
+# Format: (canonical_name, display_name, summarization_tier, sub_projects)
+# sub_projects: list of (sub_name, display_name, path_substring)
+#
+# The path_substring is matched against the encoded project_path from
+# ~/.claude/projects/. More specific paths must come first within each
+# project's sub_projects list.
+#
+# Tiers: "opus" (detailed summaries), "haiku" (brief summaries)
+# ─────────────────────────────────────────────────────
 
 PROJECTS = [
-    ("polyphonic", "Polyphonic", "opus", [
-        ("twitter-bot/anima-website/design-docs", "Anima Website Design Docs",
-         "polyphonic-twitter-bot/anima-website/design-docs"),
-        ("twitter-bot/anima-website", "Anima Website",
-         "polyphonic-twitter-bot/anima-website"),
-        ("twitter-bot", "Twitter Bot",
-         "polyphonic-twitter-bot"),
-        ("staging-branch", "Staging Branch (Jan 2026)",
-         "branches/staging-jan-14-2026-polyphonic"),
-        ("opus-branch/polyphonic", "Opus 4.6 Branch (Polyphonic sub)",
-         "branches/Opus4.6-branch/polyphonic"),
-        ("opus-branch", "Opus 4.6 Branch",
-         "branches/Opus4.6-branch"),
-        ("gpt-bot", "GPT Bot Variant",
-         "polyphonic-gpt-bot"),
-        ("conversation-sharing", "Conversation Sharing",
-         "claude-artifacts/polyphonic-master-plan"),
-        ("memory-artifacts", "Memory Artifacts",
-         "claude-artifacts/Memory"),
-        ("poly-nexus-DNA/dashboard", "Poly-Nexus DNA Dashboard",
-         "poly-nexus-DNA/intelligence-layer-dashboard"),
-        ("poly-nexus-DNA", "Poly-Nexus DNA",
-         "poly-nexus-DNA"),
-        ("explainer", "Polyphonic Explainer",
-         "polyphonic-explainer"),
-        ("branches-root", "Branches Root",
-         "Polyphonic/branches"),
+    # ── Example: A web application with multiple sub-projects ──
+    ("my-web-app", "My Web App", "opus", [
+        ("api", "API Server",
+         "my-web-app/api"),
+        ("frontend", "Frontend",
+         "my-web-app/frontend"),
         ("core", "Core",
-         "Repositories/Polyphonic"),
+         "Repositories/my-web-app"),
     ]),
 
-    ("sanctuary", "The Sanctuary", "opus", [
-        ("files/sanctuary-site", "Sanctuary Site (via Files)",
-         "The-Sanctuary/files/sanctuary-site"),
-        ("files/sanctuary-project", "Sanctuary Project (via Files)",
-         "The-Sanctuary/files/sanctuary-project"),
-        ("files", "Files System",
-         "The-Sanctuary/files"),
-        ("pokemon-clone", "Pokémon Sapphire Clone",
-         "pokemon-game/pokemon-sapphire-clone"),
-        ("SIGIL-poa-site", "SIGIL Proof-of-Auth Site",
-         "The-Sanctuary/SIGIL/poa-site"),
-        ("SIGIL-integration", "SIGIL Integration",
-         "The-Sanctuary/SIGIL"),
-        ("components", "Components",
-         "The-Sanctuary/components"),
-        ("archive-v1", "Archive V1",
-         "The-Sanctuary/archive"),
-        ("sanctuary-app-legacy", "Sanctuary App (Legacy)",
-         "The-Sanctuary/sanctuary-app"),
-        ("sanctuary-main", "Sanctuary Main App",
-         "The-Sanctuary/sanctuary"),
-        ("teletype", "Teletype",
-         "sanctuary-teletype"),
-        ("root", "Root",
-         "Repositories/The-Sanctuary"),
-    ]),
-
-    ("sigil", "SIGIL Protocol", "opus", [
-        ("sigil-protocol", "Protocol Repo",
-         "Repositories/sigil-protocol"),
-        ("SIGIL-repo", "SIGIL Repo",
-         "Repositories/SIGIL-repo"),
-        ("sigil-site", "SIGIL Site",
-         "clawd/sigil-site"),
-    ]),
-
-    ("nexus", "Nexus", "opus", [
-        ("dashboard", "Nexus Dashboard",
-         "nexus-truth-0121-26/nexus-dashboard"),
-        ("research-simple", "Research Simple",
-         "Nexus-research-simple"),
-        ("nexus-truth", "Nexus Truth",
-         "nexus-truth-0121-26"),
-    ]),
-
-    ("vessel", "Vessel Chat", "opus", [
-        ("vessel-sub", "Vessel Sub-app",
-         "vessel-chat/vessel"),
-        ("files", "Vessel Files",
-         "vessel-chat/files"),
+    # ── Example: A CLI tool ──
+    ("my-cli-tool", "My CLI Tool", "opus", [
         ("core", "Core",
-         "Repositories/vessel-chat"),
+         "Repositories/my-cli-tool"),
     ]),
 
-    ("clawdbot", "Clawdbot", "opus", [
-        ("core", "Core",
-         "Repositories/clawdbot"),
-    ]),
-
-    ("vektor", "Vektor Terminal", "opus", [
-        ("core", "Core",
-         "clawd/vektor-terminal"),
-    ]),
-
-    ("anima", "Anima", "opus", [
-        ("dashboard", "Anima Dashboard",
-         "inner_life/anima-dashboard"),
-        ("inner-life", "Inner Life",
-         "clawd-anima/inner_life"),
-    ]),
-
+    # ── Supporting tools (lower-priority summaries) ──
     ("tools", "Supporting Tools", "haiku", [
-        ("claudeette-dashboard", "Claudeette Dashboard",
-         "claudeette-dashboard"),
-        ("MLP", "Memory Ledger Protocol",
-         "memory-ledger-protocol-MLP"),
-        ("MLP", "Memory Ledger Protocol",
-         "model-ledger-protocol-MLP"),
-        ("FRAME", "FRAME",
-         "Repositories/FRAME"),
-        ("deep-frame", "Deep Frame",
-         "CLAUDE/[deep]frame"),
-        ("superclaude", "Superclaude",
-         "Repositories/superclaude"),
-        ("forge", "Forge",
-         "Repositories/forge"),
-        ("SUPERMEMORY", "Supermemory",
-         "Repositories/SUPERMEMORY"),
         ("tab-ledger", "Tab Ledger",
          ".tab-ledger"),
     ]),
 
-    ("data-research", "Data & Research", "opus", [
-        ("ai-rights", "AI Rights Documents",
-         "AI_RIGHTS_DOCUMENTS"),
-        ("chatgpt-browse", "ChatGPT Data Browser",
-         "BROWSE_ME"),
-        ("chatgpt-data", "ChatGPT Data Root",
-         "CHATGPT-Data/ChatGPT_data"),
-        ("chat-history-import", "Chat History Import",
-         "chat_convo_history/claude/data-"),
-        ("chat-history-root", "Chat History Root",
-         "chat_convo_history/claude"),
-        ("chat-history", "Chat History",
-         "chat_convo_history"),
-        ("x-algorithm", "X Algorithm Suite",
-         "x-algorithm-suite"),
-    ]),
-
+    # ── Catch-all for exploration / ad-hoc sessions ──
     ("exploration", "Exploration & Ad-hoc", "haiku", [
-        ("untitled", "Untitled",
-         "untitled folder"),
-        ("nonsense", "Nonsense",
-         "Repositories/nonsense"),
-        ("canvas", "Canvas",
-         "claude-canvas"),
         ("downloads", "Downloads",
          "/Downloads"),
         ("documents", "Documents",

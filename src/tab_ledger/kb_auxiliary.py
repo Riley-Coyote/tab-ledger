@@ -335,9 +335,9 @@ def index_teams() -> int:
 
     # Team name to project mapping
     team_to_project = {
-        "sanctuary-rebuild": "sanctuary",
-        "stardew-overhaul": "sanctuary",
-        "vektor-bot": "vektor",
+        "team-alpha": "my-project",
+        "team-beta": "my-project",
+        "team-gamma": "my-other-project",
     }
 
     try:

@@ -21,8 +21,8 @@ Python API:
     from .kb_query import KnowledgeBase
     kb = KnowledgeBase()
     results = kb.search("websocket authentication")
-    project = kb.get_project("vessel")
-    context = kb.get_continuation_context("polyphonic")
+    project = kb.get_project("my-project")
+    context = kb.get_continuation_context("my-project")
 """
 
 import argparse
@@ -105,7 +105,7 @@ class KnowledgeBase:
         """Get detailed project information including sub-projects and recent sessions.
 
         Args:
-            canonical_name: The canonical project name (e.g., 'polyphonic', 'vessel').
+            canonical_name: The canonical project name (e.g., 'my-project', 'my-app').
 
         Returns:
             Dict with project info, sub_projects list, recent_sessions list, or None if not found.
@@ -987,17 +987,17 @@ def main():
         epilog="""
 Examples:
   kb_query.py projects --human
-  kb_query.py project polyphonic --human
+  kb_query.py project my-project --human
   kb_query.py session a1b2c3d4 --human
-  kb_query.py search "websocket auth" --project vessel --limit 10
-  kb_query.py semantic "auth handshake failure" --project vessel --limit 8
-  kb_query.py memory vessel
-  kb_query.py timeline polyphonic --limit 20 --human
+  kb_query.py search "websocket auth" --project my-app --limit 10
+  kb_query.py semantic "auth handshake failure" --project my-app --limit 8
+  kb_query.py memory my-app
+  kb_query.py timeline my-project --limit 20 --human
   kb_query.py recent 15 --human
-  kb_query.py context vessel --human
-  kb_query.py iterations polyphonic --human
+  kb_query.py context my-app --human
+  kb_query.py iterations my-project --human
   kb_query.py related a1b2c3d4 --human
-  kb_query.py stats --project polyphonic --human
+  kb_query.py stats --project my-project --human
         """
     )
 

@@ -102,10 +102,10 @@ Install the launchd agent to capture tabs and index sessions every 30 minutes:
 
 ```bash
 # Copy the plist (edit paths inside if your Python isn't at /opt/homebrew/bin/python3)
-cp com.rileycoyote.tab-ledger.plist ~/Library/LaunchAgents/
+cp com.tab-ledger.plist ~/Library/LaunchAgents/
 
 # Load it
-launchctl load ~/Library/LaunchAgents/com.rileycoyote.tab-ledger.plist
+launchctl load ~/Library/LaunchAgents/com.tab-ledger.plist
 
 # Verify it's running
 launchctl list | grep tab-ledger
@@ -154,8 +154,8 @@ Keep the KB current automatically:
 
 ```bash
 # Install the nightly refresh agent (runs at 4 AM, skips summarization)
-cp com.rileycoyote.tab-ledger-kb-refresh.plist ~/Library/LaunchAgents/  # Create this from the snapshot plist, pointing to run_kb_refresh.py
-launchctl load ~/Library/LaunchAgents/com.rileycoyote.tab-ledger-kb-refresh.plist
+cp com.tab-ledger-kb-refresh.plist ~/Library/LaunchAgents/  # Create this from the snapshot plist, pointing to run_kb_refresh.py
+launchctl load ~/Library/LaunchAgents/com.tab-ledger-kb-refresh.plist
 
 # Optional: enable semantic refresh inside run_kb_refresh.py
 export KB_SEMANTIC_PROVIDER=hash
@@ -178,38 +178,38 @@ python3 kb_query.py projects
 
 # Get continuation context for a project
 # Returns: last session summary, next steps, blockers, decisions, related sessions
-python3 kb_query.py context polyphonic
+python3 kb_query.py context my-project
 
 # Full-text search across all sessions
 python3 kb_query.py search "websocket authentication"
 
 # Semantic search across memory embeddings
-python3 kb_query.py semantic "oauth callback bug in websocket flow" --project vessel --limit 8
+python3 kb_query.py semantic "oauth callback bug in websocket flow" --project my-app --limit 8
 
 # Search within a specific project
-python3 kb_query.py search "database migration" --project vessel --limit 10
+python3 kb_query.py search "database migration" --project my-app --limit 10
 
 # Chronological session timeline
-python3 kb_query.py timeline polyphonic --limit 20
+python3 kb_query.py timeline my-project --limit 20
 
 # Full session detail by UUID or prefix
 python3 kb_query.py session a1b2c3d4
 
 # Statistics (global or per-project)
 python3 kb_query.py stats
-python3 kb_query.py stats --project vessel
+python3 kb_query.py stats --project my-app
 
 # Recent sessions across all projects
 python3 kb_query.py recent 10
 
 # Project iterations grouped by phase
-python3 kb_query.py iterations polyphonic
+python3 kb_query.py iterations my-project
 
 # Sessions connected to a specific session
 python3 kb_query.py related <session-uuid>
 
 # High-signal continuity packet (timeline + blockers + semantic anchors)
-python3 kb_query.py memory polyphonic
+python3 kb_query.py memory my-project
 ```
 
 ### Python API
@@ -222,17 +222,17 @@ from kb_query import KnowledgeBase
 kb = KnowledgeBase(readonly=True)
 
 # Resume context — the key query for session continuity
-context = kb.get_continuation_context("polyphonic")
+context = kb.get_continuation_context("my-project")
 # Returns: last_session, next_steps, blockers, decisions, related_sessions
 
 # Full-text search (FTS5 syntax: AND, OR, NOT, "phrases", prefix*, NEAR())
-results = kb.search("websocket OR authentication", project="vessel", limit=10)
+results = kb.search("websocket OR authentication", project="my-app", limit=10)
 
 # Semantic search
-semantic = kb.semantic_search("oauth callback bug in websocket flow", project="vessel", limit=8)
+semantic = kb.semantic_search("oauth callback bug in websocket flow", project="my-app", limit=8)
 
 # Continuity packet for natural project memory continuity
-memory = kb.get_memory_packet("polyphonic")
+memory = kb.get_memory_packet("my-project")
 
 # List all projects
 projects = kb.list_projects()
@@ -241,10 +241,10 @@ projects = kb.list_projects()
 session = kb.get_session("a1b2c3d4")  # prefix match supported
 
 # Timeline
-timeline = kb.get_timeline("polyphonic", limit=50)
+timeline = kb.get_timeline("my-project", limit=50)
 
 # Stats
-stats = kb.get_stats(project="vessel")
+stats = kb.get_stats(project="my-app")
 
 kb.close()
 ```
@@ -292,7 +292,7 @@ rows = conn.execute("SELECT * FROM kb_fts WHERE text MATCH 'websocket authentica
 rows = conn.execute("""
     SELECT * FROM kb_fts
     WHERE text MATCH 'database AND migration'
-    AND project_name = 'vessel'
+    AND project_name = 'my-app'
 """).fetchall()
 ```
 
@@ -315,7 +315,7 @@ The most powerful search. Built on SQLite's FTS5 engine with Porter stemming and
 | Phrase | `"database migration"` | Exact phrase match |
 | Prefix | `web*` | Matches websocket, webrtc, webpack... |
 | Proximity | `NEAR(auth websocket, 5)` | Terms within 5 tokens of each other |
-| Filter | `AND project_name = 'vessel'` | Scope to a project |
+| Filter | `AND project_name = 'my-app'` | Scope to a project |
 | Source | `AND source_type = 'summary'` | Filter by content type |
 
 Source types: `summary`, `message`, `prompt`, `plan`, `todo`
@@ -502,7 +502,7 @@ Tab Ledger is designed to be queryable by AI agents, not just humans.
 
 Register the MCP server in `~/.claude/settings.json`. Every session and subagent automatically gets access to the `kb_*` tools. The continuation context tool (`kb_context`) is particularly valuable — it gives any agent instant awareness of what happened in the last session on a project.
 
-### For Other Agents (OpenClaw, Clawdbot, etc.)
+### For Other Agents (OpenClaw, My Bot, etc.)
 
 Add the CLI commands to the agent's tool definitions. The CLI returns JSON by default, making it easy to parse programmatically:
 
@@ -538,7 +538,7 @@ A comprehensive handoff document is available at `KNOWLEDGE_BASE_HANDOFF.md` wit
 | `kb_memory.py` | Continuity packet assembly for natural project resumption |
 | `kb_query.py` | Python API + CLI for querying the KB |
 | `kb_mcp_server.py` | Stdio MCP server for Claude Code integration |
-| `com.rileycoyote.tab-ledger.plist` | macOS launchd agent (30-min snapshots) |
+| `com.tab-ledger.plist` | macOS launchd agent (30-min snapshots) |
 | `tests/test_kb_hardening.py` | Regression tests for hardening-critical behavior |
 | `.github/workflows/ci.yml` | CI pipeline (compile + pytest) |
 | `requirements-dev.txt` | Dev/test dependencies |

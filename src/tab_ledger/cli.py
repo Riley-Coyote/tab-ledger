@@ -1,7 +1,7 @@
 """Unified CLI for tab-ledger.
 
 Usage:
-    tab-ledger search "websocket auth" --project vessel
+    tab-ledger search "websocket auth" --project my-project
     tab-ledger stats
     tab-ledger build
     tab-ledger mcp

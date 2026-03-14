@@ -49,7 +49,10 @@ DEFAULT_PRICES = {"input": 3.0, "output": 15.0, "cache_write": 3.75, "cache_read
 def get_project_name(project_dir: str) -> str:
     """Extract a readable project name from the directory-encoded path."""
     name = os.path.basename(project_dir)
-    parts = name.replace("-Users-rileycoyote-", "").split("-")
+    # Strip the encoded home directory prefix (e.g. "-Users-username-")
+    import re as _re
+    name = _re.sub(r"^-Users-[^-]+-", "", name)
+    parts = name.split("-")
     meaningful = [p for p in parts if p and p not in ("Documents", "Repositories", "CLAUDE", "claude", "code")]
     if meaningful:
         return meaningful[-1]

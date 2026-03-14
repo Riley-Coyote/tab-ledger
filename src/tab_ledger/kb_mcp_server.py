@@ -33,7 +33,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Search query (FTS5 syntax supported, e.g. 'websocket OR authentication')"},
-                "project": {"type": "string", "description": "Optional: filter to a specific project (e.g. 'polyphonic', 'vessel')"},
+                "project": {"type": "string", "description": "Optional: filter to a specific project (e.g. 'my-project', 'my-other-project')"},
                 "limit": {"type": "integer", "description": "Max results (default 20)", "default": 20},
             },
             "required": ["query"],
@@ -77,7 +77,7 @@ TOOLS = [
         inputSchema={
             "type": "object",
             "properties": {
-                "project": {"type": "string", "description": "Canonical project name (e.g. 'polyphonic', 'vessel', 'sanctuary')"},
+                "project": {"type": "string", "description": "Canonical project name (e.g. 'my-project', 'my-other-project', 'my-other-project')"},
             },
             "required": ["project"],
         },

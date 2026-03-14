@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 # Category definitions: (name, color_hex, patterns)
 # Patterns are matched against the full URL or domain
-# ORDER MATTERS: first match wins. Sanctuary/Vessels must precede Polyphonic.
+# ORDER MATTERS: first match wins. More specific patterns should come first.
 CATEGORIES = [
     ("Google Workspace", "#34A853", [
         r"docs\.google\.com", r"mail\.google\.com", r"drive\.google\.com",
@@ -35,21 +35,10 @@ CATEGORIES = [
         r"fuselabcreative\.com", r"behance\.net", r"figma\.com",
         r"awwwards\.com", r"rubik\.design",
     ]),
-    ("SIGIL", "#22C55E", [
-        r"sigilprotocol\.xyz", r"sigil.*github",
-    ]),
-    ("Sanctuary / Vessels", "#14B8A6", [
-        r"vessels\.chat", r"vessel.*lovable\.app",
-        r"localhost:300[0-5]", r"sanctuary",
-    ]),
-    ("Polyphonic", "#3B82F6", [
-        r"lovable\.dev", r"lovableproject\.com", r"polyphonic\.chat",
-        r"lovable\.app",
-        r"localhost:51[7-9]\d", r"localhost:5[2-9]\d{2}",
-    ]),
-    ("Moltbook", "#F59E0B", [
-        r"moltbook\.com",
-    ]),
+    # Add your project-specific URL patterns here, e.g.:
+    # ("My Project", "#3B82F6", [
+    #     r"myproject\.com", r"localhost:3000",
+    # ]),
     ("Crypto", "#EAB308", [
         r"dexscreener\.com", r"margex\.com", r"pump\.fun",
         r"tradingview\.com", r"bankr\.bot", r"birdeye\.so",
@@ -161,14 +150,12 @@ def categorize_cc_session(summary: str, first_prompt: str, project_name: str) ->
     """Categorize a Claude Code session by its content."""
     text = f"{summary} {first_prompt} {project_name}".lower()
 
+    # Add your project-specific keywords here to auto-categorize sessions.
     keyword_map = {
-        "Polyphonic": ["polyphonic", "lovable", "anima", "persona", "chatbot"],
-        "SIGIL": ["sigil", "protocol", "stamp"],
-        "Sanctuary / Vessels": ["sanctuary", "vessel", "moltbook", "the-sanctuary"],
-        "Moltbook": ["moltbook", "molt"],
+        # "My Project": ["my-project", "myapp"],
         "Infrastructure": ["deploy", "vercel", "supabase", "docker", "ci/cd", "github action"],
         "Creative / Gen": ["design", "art", "visual", "creative", "midjourney"],
-        "Deep Research": ["research", "consciousness", "arxiv", "analysis"],
+        "Deep Research": ["research", "arxiv", "analysis"],
         "Crypto": ["token", "solana", "crypto", "dex", "trading"],
         "X / Twitter": ["twitter", "tweet", "x bot", "x api"],
     }

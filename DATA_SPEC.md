@@ -16,7 +16,7 @@
 ```
 
 The `<encoded-project-path>` replaces `/` with `-` in the project directory path.
-Example: `/Users/rileycoyote/Documents/Repositories/Polyphonic` becomes `-Users-rileycoyote-Documents-Repositories-Polyphonic`.
+Example: `~/Documents/Repositories/My Project` becomes `-Users-username-Documents-Repositories-My Project`.
 
 ### Scale
 
@@ -28,10 +28,10 @@ Example: `/Users/rileycoyote/Documents/Repositories/Polyphonic` becomes `-Users-
 
 | Project Directory | Sessions |
 |---|---|
-| `polyphonic-twitter-bot` | 35 |
-| `The-Sanctuary/files` | 27 |
-| `Polyphonic/branches/Opus4-6-branch` | 12 |
-| Root (`-Users-rileycoyote`) | 7+ |
+| `my-project-twitter-bot` | 35 |
+| `The-My Other Project/files` | 27 |
+| `My Project/branches/Opus4-6-branch` | 12 |
+| Root (`-Users-username`) | 7+ |
 
 ### JSONL Record Types
 
@@ -56,9 +56,9 @@ Each line is a self-contained JSON object. The `type` field determines the schem
   "sessionId": "fe6d2760-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "isSidechain": false,
   "userType": "external",
-  "cwd": "/Users/rileycoyote/path/to/project",
+  "cwd": "~/path/to/project",
   "version": "2.1.62",
-  "gitBranch": "vessel-chat",
+  "gitBranch": "my-app-chat",
   "slug": "functional-brewing-hinton",
   "timestamp": "2026-02-27T09:39:10.973Z"
 }
@@ -212,14 +212,14 @@ Present in **21 of 52** project directories.
   "entries": [
     {
       "sessionId": "d3dac2f4-xxxx",
-      "fullPath": "/Users/rileycoyote/.claude/projects/.../d3dac2f4.jsonl",
+      "fullPath": "~/.claude/projects/.../d3dac2f4.jsonl",
       "fileMtime": 1770063324749,
       "firstPrompt": "hey claude, can you...",
       "messageCount": 42,
       "created": "2026-01-21T07:42:38.303Z",
       "modified": "2026-01-21T07:42:50.631Z",
       "gitBranch": "main",
-      "projectPath": "/Users/rileycoyote/Documents/Repositories/The-Sanctuary",
+      "projectPath": "~/Documents/Repositories/The-My Other Project",
       "isSidechain": false
     }
   ]
@@ -325,7 +325,7 @@ Aggregate stats: **256 total sessions, 106K messages, first session Dec 2, 2025.
   "display": "hey claude id like for you to explore the codebase...",
   "pastedContents": {},
   "timestamp": 1759304505576,
-  "project": "/Users/rileycoyote/Documents/Repositories/Visual-chat-liminal-board"
+  "project": "~/Documents/Repositories/Visual-chat-liminal-board"
 }
 ```
 
@@ -364,7 +364,7 @@ These are the planning documents created when Claude enters "plan mode" before m
 ```json
 [
   {
-    "content": "Examine current nexus CLI codebase",
+    "content": "Examine current my-dashboard CLI codebase",
     "status": "completed",
     "priority": "high",
     "id": "1"
@@ -390,25 +390,25 @@ Status values: `pending`, `in_progress`, `completed`. Priority: `high`, `medium`
 ~/.claude/teams/*/config.json
 ```
 
-**Count:** 3 teams: `sanctuary-rebuild`, `stardew-overhaul`, `vektor-bot`
+**Count:** 3 teams: `my-other-project-rebuild`, `stardew-overhaul`, `my-tool-bot`
 
 ### Schema
 
 ```json
 {
-  "name": "sanctuary-rebuild",
-  "description": "Rebuild The Sanctuary website with new design",
+  "name": "my-other-project-rebuild",
+  "description": "Rebuild The My Other Project website with new design",
   "createdAt": 1770353391560,
-  "leadAgentId": "team-lead@sanctuary-rebuild",
+  "leadAgentId": "team-lead@my-other-project-rebuild",
   "leadSessionId": "6064c38c-xxxx",
   "members": [
     {
-      "agentId": "team-lead@sanctuary-rebuild",
+      "agentId": "team-lead@my-other-project-rebuild",
       "name": "team-lead",
       "agentType": "team-lead",
       "model": "claude-opus-4-6",
       "joinedAt": 1770353391560,
-      "cwd": "/Users/rileycoyote/...",
+      "cwd": "~/...",
       "prompt": "Full system prompt for this agent...",
       "color": "blue",
       "planModeRequired": false,
@@ -468,7 +468,7 @@ Timestamped internal debug traces: hook execution, plugin loading, permission ch
     "modified_at": "2025-08-19T20:48:08.808699",
     "accessed_at": "2025-08-19T20:48:08.808699",
     "access_count": 0,
-    "context": {"directory": "/Users/rileycoyote"}
+    "context": {"directory": "/Users/username"}
   }
 }
 ```
@@ -625,7 +625,7 @@ Currently installed: `playwright`, `canvas`, `frontend-design`, `plugin-dev`, `r
 ```
 ~/.claude/skills/
 ```
-16 skills: `brand-guidelines`, `browser-use`, `canvas-design`, `design-ui`, `find-skills`, `frontend-design`, `gsap-fundamentals`, `scroll-storyteller`, `social-growth-engineer`, `solana`, `threejs-postprocessing`, `ui-animation`, `ui-ux-pro-max`, `web-design-expert`.
+16 skills: `brand-guidelines`, `browser-use`, `canvas-design`, `design-ui`, `find-skills`, `frontend-design`, `gsap-fundamentals`, `scroll-storyteller`, `social-growth-engineer`, `solana`, `threejs-postprocessing`, `ui-my-enginetion`, `ui-ux-pro-max`, `web-design-expert`.
 
 ---
 
@@ -644,7 +644,7 @@ CREATE TABLE cc_sessions (
     git_branch TEXT,                 -- Active git branch
     summary TEXT,                    -- AI-generated summary (when available)
     first_prompt TEXT,               -- First human message (500 char max)
-    category TEXT,                   -- Auto-categorized (Polyphonic, Sanctuary, etc.)
+    category TEXT,                   -- Auto-categorized (My Project, My Other Project, etc.)
     message_count INTEGER,           -- Count of user-type records
     model TEXT,                      -- Most-used Claude model in session
     started_at TIMESTAMP,            -- First record timestamp

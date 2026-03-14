@@ -45,12 +45,12 @@ def _create_ledger_db(path: Path) -> None:
         """,
         (
             "sess-1",
-            "/Users/example/Documents/Repositories/polyphonic-twitter-bot",
-            "polyphonic-twitter-bot",
+            "/Users/example/Documents/Repositories/my-project-sub-module",
+            "my-project-sub-module",
             "main",
             "initial",
             "build feature",
-            "Polyphonic",
+            "My Project",
             3,
             "claude-opus-4-6",
             "2026-02-01T00:00:00+00:00",
@@ -137,15 +137,15 @@ def test_indexer_assigns_project_for_new_session(tmp_path, monkeypatch):
 
     kb = kb_schema.get_kb_db()
     kb.execute(
-        "INSERT INTO kb_projects (canonical_name, display_name) VALUES ('polyphonic', 'Polyphonic')"
+        "INSERT INTO kb_projects (canonical_name, display_name) VALUES ('my-project', 'My Project')"
     )
     poly_id = kb.execute(
-        "SELECT id FROM kb_projects WHERE canonical_name = 'polyphonic'"
+        "SELECT id FROM kb_projects WHERE canonical_name = 'my-project'"
     ).fetchone()[0]
     kb.execute(
         """
         INSERT INTO kb_sub_projects (project_id, canonical_name, display_name, path_pattern)
-        VALUES (?, 'twitter-bot', 'Twitter Bot', 'polyphonic-twitter-bot')
+        VALUES (?, 'sub-module', 'Twitter Bot', 'my-project-sub-module')
         """,
         (poly_id,),
     )
@@ -165,7 +165,7 @@ def test_indexer_assigns_project_for_new_session(tmp_path, monkeypatch):
     kb.commit()
 
     claude_projects = tmp_path / "claude-projects"
-    session_dir = claude_projects / "-Users-example-Documents-Repositories-polyphonic-twitter-bot"
+    session_dir = claude_projects / "-Users-example-Documents-Repositories-my-project-sub-module"
     session_dir.mkdir(parents=True)
     jsonl_path = session_dir / "abc123.jsonl"
     jsonl_path.write_text('{"type":"user","message":{"content":[{"type":"text","text":"hi"}]}}\n')

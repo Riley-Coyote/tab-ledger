@@ -99,7 +99,7 @@ Destroys the existing knowledge_base.db and rebuilds from scratch. Use if the sc
 
 This is the expensive stage. It calls Claude via the local authenticated CLI for every unsummarized session.
 
-- **Two-tier model selection**: Opus for major projects (polyphonic, sanctuary, sigil, nexus, vessel, clawdbot, vektor, anima, data-research), Haiku for minor/ad-hoc
+- **Two-tier model selection**: Opus for major projects (my-project, my-other-project, my-protocol, my-dashboard, my-app, my-bot, my-tool, my-engine, data-research), Haiku for minor/ad-hoc
 - **Intelligent content sampling**: Adjusts extraction strategy based on JSONL file size
 - **Deep archives**: Files >100MB get special analysis stored in kb_deep_archives
 - **Rate limited**: 1-second delay between calls, exponential backoff on errors
@@ -143,28 +143,28 @@ cd ~/.tab-ledger
 python3 kb_query.py projects --human
 
 # Deep-dive into a project
-python3 kb_query.py project polyphonic --human
+python3 kb_query.py project my-project --human
 
 # Full-text search
 python3 kb_query.py search "websocket authentication" --human
 
 # Semantic search
-python3 kb_query.py semantic "oauth callback bug in websocket flow" --project vessel --human
+python3 kb_query.py semantic "oauth callback bug in websocket flow" --project my-app --human
 
 # Continuity packet (timeline + blockers + semantic anchors)
-python3 kb_query.py memory vessel
+python3 kb_query.py memory my-app
 
 # Get continuation context for an agent
-python3 kb_query.py context vessel
+python3 kb_query.py context my-app
 
 # Recent sessions
 python3 kb_query.py recent 15 --human
 
 # Project timeline
-python3 kb_query.py timeline sanctuary --human
+python3 kb_query.py timeline my-other-project --human
 
 # Session iterations by phase
-python3 kb_query.py iterations polyphonic --human
+python3 kb_query.py iterations my-project --human
 ```
 
 ### Python API (for agents)
@@ -175,23 +175,23 @@ from kb_query import KnowledgeBase
 kb = KnowledgeBase()
 
 # Get context for resuming work
-context = kb.get_continuation_context("polyphonic")
+context = kb.get_continuation_context("my-project")
 print(context["last_session"]["summary_text"])
 print(context["next_steps"])
 
 # Search across everything
-results = kb.search("SIGIL proof of authenticity")
+results = kb.search("My Protocol proof of authenticity")
 for r in results:
     print(r["session_uuid"], r["text"][:100])
 
 # Semantic search
-semantic = kb.semantic_search("oauth callback bug in websocket flow", project="vessel", limit=8)
+semantic = kb.semantic_search("oauth callback bug in websocket flow", project="my-app", limit=8)
 
 # Memory continuity packet
-memory = kb.get_memory_packet("vessel")
+memory = kb.get_memory_packet("my-app")
 
 # Get full project info
-project = kb.get_project("sanctuary")
+project = kb.get_project("my-other-project")
 print(f"Sessions: {project['total_sessions']}, Cost: ${project['total_cost_usd']}")
 
 # Get related sessions
@@ -252,10 +252,10 @@ Or via Python:
 sys.path.insert(0, str(Path.home() / ".tab-ledger"))
 from kb_query import KnowledgeBase
 kb = KnowledgeBase()
-context = kb.get_continuation_context("polyphonic")
+context = kb.get_continuation_context("my-project")
 ```
 
-Projects: polyphonic, sanctuary, sigil, nexus, vessel, clawdbot, vektor, anima,
+Projects: my-project, my-other-project, my-protocol, my-dashboard, my-app, my-bot, my-tool, my-engine,
 tools, data-research, exploration
 ```
 

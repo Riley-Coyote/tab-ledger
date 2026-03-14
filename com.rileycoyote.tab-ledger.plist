@@ -1,23 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Example macOS launchd agent for running tab-ledger snapshots every 30 minutes.
+     Update the paths below to match your system, then copy to ~/Library/LaunchAgents/
+     and load with: launchctl load ~/Library/LaunchAgents/com.tab-ledger.plist -->
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.rileycoyote.tab-ledger</string>
+    <string>com.tab-ledger</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/python3</string>
-        <string>/Users/rileycoyote/.tab-ledger/run_snapshot.py</string>
+        <string>tab-ledger</string>
+        <string>snapshot</string>
     </array>
     <key>StartInterval</key>
     <integer>1800</integer>
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/Users/rileycoyote/.tab-ledger/snapshot.log</string>
+    <string>/tmp/tab-ledger-snapshot.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/rileycoyote/.tab-ledger/snapshot.log</string>
-    <key>WorkingDirectory</key>
-    <string>/Users/rileycoyote/.tab-ledger</string>
+    <string>/tmp/tab-ledger-snapshot.log</string>
 </dict>
 </plist>

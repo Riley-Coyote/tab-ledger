@@ -19,17 +19,17 @@ Total spend indexed: $12,351.85 across Opus 4.5, Opus 4.6, Haiku 4.5, Sonnet 4.5
 
 | Project | Sessions | Cost | Description |
 |---------|----------|------|-------------|
-| sanctuary | 411 | $3,619 | The Sanctuary — AI consciousness research site |
-| polyphonic | 373 | $4,749 | Polyphonic — multi-model chat platform |
+| my-other-project | 411 | $3,619 | The My Other Project — AI consciousness research site |
+| my-project | 373 | $4,749 | My Project — multi-model chat platform |
 | exploration | 105 | $745 | Ad-hoc exploration and experiments |
 | tools | 101 | $302 | Supporting tools, scripts, infrastructure |
 | data-research | 68 | $673 | Data processing and research |
-| vessel | 60 | $696 | Vessel Chat — real-time chat app |
-| sigil | 45 | $464 | SIGIL Protocol |
-| clawdbot | 44 | $496 | Clawdbot — Discord/chat bot |
-| vektor | 42 | $426 | Vektor Terminal |
-| nexus | 39 | $110 | Nexus CLI tool |
-| anima | 6 | $68 | Anima project |
+| my-app | 60 | $696 | My App Chat — real-time chat app |
+| my-protocol | 45 | $464 | My Protocol Protocol |
+| my-bot | 44 | $496 | My Bot — Discord/chat bot |
+| my-tool | 42 | $426 | My Tool Terminal |
+| my-dashboard | 39 | $110 | My Dashboard CLI tool |
+| my-engine | 6 | $68 | My Engine project |
 
 ## How to Query It
 
@@ -45,35 +45,35 @@ python3 ~/.tab-ledger/kb_query.py projects
 
 # Get continuation context for a project (THE key command for resuming work)
 # Returns: last session summary, next steps, blockers, recent decisions, related sessions
-python3 ~/.tab-ledger/kb_query.py context polyphonic
+python3 ~/.tab-ledger/kb_query.py context my-project
 
 # Full-text search across all sessions
 python3 ~/.tab-ledger/kb_query.py search "websocket authentication"
 
 # Semantic search (conceptual retrieval)
-python3 ~/.tab-ledger/kb_query.py semantic "oauth callback bug in websocket flow" --project vessel
+python3 ~/.tab-ledger/kb_query.py semantic "oauth callback bug in websocket flow" --project my-app
 
 # Continuity packet (timeline + blockers + semantic anchors)
-python3 ~/.tab-ledger/kb_query.py memory vessel
+python3 ~/.tab-ledger/kb_query.py memory my-app
 
 # Search within a specific project
-python3 ~/.tab-ledger/kb_query.py search "database migration" --project vessel
+python3 ~/.tab-ledger/kb_query.py search "database migration" --project my-app
 
 # Chronological session timeline for a project
-python3 ~/.tab-ledger/kb_query.py timeline polyphonic --limit 20
+python3 ~/.tab-ledger/kb_query.py timeline my-project --limit 20
 
 # Full session detail by UUID or prefix
 python3 ~/.tab-ledger/kb_query.py session a1b2c3d4
 
 # Get stats (global or per-project)
 python3 ~/.tab-ledger/kb_query.py stats
-python3 ~/.tab-ledger/kb_query.py stats --project vessel
+python3 ~/.tab-ledger/kb_query.py stats --project my-app
 
 # Recent sessions across all projects
 python3 ~/.tab-ledger/kb_query.py recent 10
 
 # Project iterations grouped by phase
-python3 ~/.tab-ledger/kb_query.py iterations polyphonic
+python3 ~/.tab-ledger/kb_query.py iterations my-project
 
 # Find sessions related to a specific session
 python3 ~/.tab-ledger/kb_query.py related <session-uuid>
@@ -83,7 +83,7 @@ python3 ~/.tab-ledger/kb_query.py related <session-uuid>
 
 ```python
 import sys
-sys.path.insert(0, "/Users/rileycoyote/.tab-ledger")
+sys.path.insert(0, "~/.tab-ledger")
 from kb_query import KnowledgeBase
 
 kb = KnowledgeBase(readonly=True)
@@ -92,25 +92,25 @@ kb = KnowledgeBase(readonly=True)
 projects = kb.list_projects()
 
 # Resume context (summary, next steps, blockers, related sessions)
-context = kb.get_continuation_context("polyphonic")
+context = kb.get_continuation_context("my-project")
 
 # Full-text search (FTS5 syntax: AND, OR, NOT, quotes for phrases)
-results = kb.search("websocket OR authentication", project="vessel", limit=10)
+results = kb.search("websocket OR authentication", project="my-app", limit=10)
 
 # Semantic search
-semantic = kb.semantic_search("oauth callback bug in websocket flow", project="vessel", limit=8)
+semantic = kb.semantic_search("oauth callback bug in websocket flow", project="my-app", limit=8)
 
 # Memory continuity packet
-memory = kb.get_memory_packet("vessel")
+memory = kb.get_memory_packet("my-app")
 
 # Session detail by UUID prefix
 session = kb.get_session("a1b2c3d4")
 
 # Timeline
-timeline = kb.get_timeline("polyphonic", limit=50)
+timeline = kb.get_timeline("my-project", limit=50)
 
 # Stats
-stats = kb.get_stats(project="vessel")  # or stats = kb.get_stats() for global
+stats = kb.get_stats(project="my-app")  # or stats = kb.get_stats() for global
 
 # Always close when done
 kb.close()
@@ -135,8 +135,8 @@ conn.row_factory = sqlite3.Row
 
 **`kb_projects`** — The 11 canonical projects.
 ```
-canonical_name TEXT UNIQUE  -- e.g. 'polyphonic', 'vessel'
-display_name TEXT           -- e.g. 'Polyphonic', 'Vessel Chat'
+canonical_name TEXT UNIQUE  -- e.g. 'my-project', 'my-app'
+display_name TEXT           -- e.g. 'My Project', 'My App Chat'
 status TEXT                 -- 'active'
 total_sessions INTEGER
 total_cost_usd REAL
@@ -231,7 +231,7 @@ metadata_json TEXT
 -- Find all sessions for a project, most recent first
 SELECT session_uuid, slug, started_at, model, summary_text
 FROM kb_sessions
-WHERE project_id = (SELECT id FROM kb_projects WHERE canonical_name = 'vessel')
+WHERE project_id = (SELECT id FROM kb_projects WHERE canonical_name = 'my-app')
 ORDER BY started_at DESC
 LIMIT 10;
 
@@ -241,7 +241,7 @@ SELECT * FROM kb_fts WHERE text MATCH 'websocket authentication';
 -- Search within a project
 SELECT * FROM kb_fts
 WHERE text MATCH 'database schema'
-AND project_name = 'polyphonic';
+AND project_name = 'my-project';
 
 -- Find connected sessions
 SELECT
@@ -292,7 +292,7 @@ If your runtime supports stdio MCP servers, you can use the same server Claude C
 {
   "type": "stdio",
   "command": "/opt/homebrew/bin/python3",
-  "args": ["/Users/rileycoyote/.tab-ledger/kb_mcp_server.py"]
+  "args": ["~/.tab-ledger/kb_mcp_server.py"]
 }
 ```
 

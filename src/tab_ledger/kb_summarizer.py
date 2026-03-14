@@ -43,8 +43,8 @@ def _claude_env():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 MAJOR_PROJECTS = {
-    "polyphonic", "sanctuary", "sigil", "nexus", "vessel",
-    "clawdbot", "vektor", "anima", "data-research"
+    # Add your major project names here
+    # e.g. "my-web-app", "my-cli-tool"
 }
 
 SUMMARIZATION_MODELS = {
