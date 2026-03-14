@@ -423,8 +423,8 @@ pre .k { color: var(--text-3); }
 <pre><span class="k">from</span> tab_ledger <span class="k">import</span> KnowledgeBase
 
 kb = KnowledgeBase()
-results = kb.search(<span class="s">"websocket auth"</span>, project=<span class="s">"vessel"</span>)
-context = kb.get_continuation_context(<span class="s">"polyphonic"</span>)
+results = kb.search(<span class="s">"auth flow"</span>, project=<span class="s">"my-project"</span>)
+context = kb.get_continuation_context(<span class="s">"my-project"</span>)
 stats   = kb.get_stats()
 kb.close()</pre>
   </section>
