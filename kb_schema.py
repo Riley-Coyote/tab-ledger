@@ -37,7 +37,7 @@ def create_schema(drop_existing: bool = False):
     if drop_existing:
         # Drop in reverse dependency order
         tables = [
-            "kb_fts", "kb_connections", "kb_messages",
+            "kb_fts", "kb_embeddings", "kb_connections", "kb_messages",
             "kb_commands", "kb_plans", "kb_todos", "kb_teams",
             "kb_claude_ai", "kb_deep_archives", "kb_progress",
             "kb_sessions", "kb_sub_projects", "kb_projects",
@@ -179,6 +179,27 @@ def create_schema(drop_existing: bool = False):
         );
 
         -- ═══════════════════════════════════════════════════════
+        -- SEMANTIC EMBEDDING INDEX
+        -- ═══════════════════════════════════════════════════════
+
+        CREATE TABLE IF NOT EXISTS kb_embeddings (
+            id INTEGER PRIMARY KEY,
+            source_key TEXT UNIQUE NOT NULL,
+            session_uuid TEXT,
+            source_type TEXT NOT NULL,
+            project_name TEXT,
+            text_hash TEXT NOT NULL,
+            text_preview TEXT,
+            embedding BLOB NOT NULL,
+            embedding_norm REAL DEFAULT 0.0,
+            embedding_dim INTEGER NOT NULL,
+            embedding_model TEXT NOT NULL,
+            metadata_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- ═══════════════════════════════════════════════════════
         -- AUXILIARY DATA
         -- ═══════════════════════════════════════════════════════
 
@@ -267,6 +288,16 @@ def create_schema(drop_existing: bool = False):
         );
     """)
 
+    # Normalize historical duplicates before creating unique indexes.
+    conn.execute("""
+        DELETE FROM kb_commands
+        WHERE id NOT IN (
+            SELECT MIN(id)
+            FROM kb_commands
+            GROUP BY command_text, project_path, timestamp, has_pasted_content
+        )
+    """)
+
     # Create indexes (separate from executescript for better error handling)
     indexes = [
         "CREATE INDEX IF NOT EXISTS idx_kb_sessions_project ON kb_sessions(project_id)",
@@ -281,8 +312,14 @@ def create_schema(drop_existing: bool = False):
         "CREATE INDEX IF NOT EXISTS idx_kb_connections_source ON kb_connections(source_session_id)",
         "CREATE INDEX IF NOT EXISTS idx_kb_connections_target ON kb_connections(target_session_id)",
         "CREATE INDEX IF NOT EXISTS idx_kb_connections_type ON kb_connections(connection_type)",
+        "CREATE INDEX IF NOT EXISTS idx_kb_embeddings_project ON kb_embeddings(project_name)",
+        "CREATE INDEX IF NOT EXISTS idx_kb_embeddings_session ON kb_embeddings(session_uuid)",
+        "CREATE INDEX IF NOT EXISTS idx_kb_embeddings_type ON kb_embeddings(source_type)",
+        "CREATE INDEX IF NOT EXISTS idx_kb_embeddings_model ON kb_embeddings(embedding_model)",
         "CREATE INDEX IF NOT EXISTS idx_kb_commands_project ON kb_commands(project_id)",
         "CREATE INDEX IF NOT EXISTS idx_kb_commands_time ON kb_commands(timestamp DESC)",
+        """CREATE UNIQUE INDEX IF NOT EXISTS idx_kb_commands_dedupe
+           ON kb_commands(command_text, project_path, timestamp, has_pasted_content)""",
         "CREATE INDEX IF NOT EXISTS idx_kb_plans_project ON kb_plans(project_id)",
         "CREATE INDEX IF NOT EXISTS idx_kb_plans_session ON kb_plans(session_id)",
         "CREATE INDEX IF NOT EXISTS idx_kb_todos_session ON kb_todos(session_id)",
@@ -294,7 +331,7 @@ def create_schema(drop_existing: bool = False):
     stages = [
         "taxonomy", "session_import", "message_indexing",
         "fts_build", "summarization", "linking",
-        "auxiliary", "verification",
+        "auxiliary", "semantic_indexing", "verification",
     ]
     for stage in stages:
         conn.execute(
@@ -305,7 +342,7 @@ def create_schema(drop_existing: bool = False):
     conn.commit()
     conn.close()
     print(f"Knowledge base schema created at {KB_DB}")
-    print(f"  Tables: 13 (including FTS5)")
+    print(f"  Tables: 14 (including FTS5 + semantic embeddings)")
     print(f"  Indexes: {len(indexes)}")
     print(f"  Progress stages: {len(stages)}")
 

@@ -415,6 +415,9 @@ def index_claude_ai() -> int:
     count = 0
 
     try:
+        kb.execute("DELETE FROM kb_claude_ai")
+        kb.commit()
+
         # Open Claude.ai conversations database
         claude_ai = sqlite3.connect(CLAUDE_AI_DB)
         claude_ai.row_factory = sqlite3.Row
@@ -433,12 +436,13 @@ def index_claude_ai() -> int:
 
         for conv in conversations:
             try:
-                conversation_uuid = conv["uuid"]
-                title = conv["name"]
-                message_count = conv.get("message_count", 0)
-                created_at = conv.get("created_at")
-                updated_at = conv.get("updated_at")
-                summary = conv.get("summary")
+                cols = set(conv.keys())
+                conversation_uuid = conv["uuid"] if "uuid" in cols else None
+                title = conv["name"] if "name" in cols else None
+                message_count = conv["message_count"] if "message_count" in cols else 0
+                created_at = conv["created_at"] if "created_at" in cols else None
+                updated_at = conv["updated_at"] if "updated_at" in cols else None
+                summary = conv["summary"] if "summary" in cols else None
 
                 kb.execute("""
                     INSERT OR REPLACE INTO kb_claude_ai
@@ -451,7 +455,8 @@ def index_claude_ai() -> int:
                 count += 1
 
             except Exception as e:
-                print(f"    Error indexing conversation {conv.get('uuid', 'unknown')}: {e}")
+                conv_uuid = conv["uuid"] if "uuid" in set(conv.keys()) else "unknown"
+                print(f"    Error indexing conversation {conv_uuid}: {e}")
 
         kb.commit()
         print(f"  Indexed {count} Claude.ai conversations")

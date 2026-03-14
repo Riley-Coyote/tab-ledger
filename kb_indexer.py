@@ -19,9 +19,9 @@ import sys
 from pathlib import Path
 from typing import Generator, Optional, Tuple, Dict, Any
 from datetime import datetime
-from collections import defaultdict
 
 from kb_schema import get_kb_db
+from kb_taxonomy import map_session
 
 
 CLAUDE_PROJECTS = Path.home() / ".claude" / "projects"
@@ -49,30 +49,129 @@ def find_all_jsonl() -> Generator[Tuple[Path, str], None, None]:
             yield jsonl_file, session_uuid
 
 
-def get_session_id_for_uuid(conn: sqlite3.Connection, session_uuid: str) -> Optional[int]:
+def _decode_project_hint(jsonl_path: Path) -> str:
+    """Best-effort decode of encoded Claude project directory back to a path-like string."""
+    try:
+        rel = jsonl_path.relative_to(CLAUDE_PROJECTS)
+    except ValueError:
+        return str(jsonl_path.parent)
+
+    if not rel.parts:
+        return str(jsonl_path.parent)
+
+    encoded_project = rel.parts[0]
+    decoded = encoded_project.replace("-", "/")
+    if decoded and not decoded.startswith("/"):
+        decoded = "/" + decoded
+    return decoded or str(jsonl_path.parent)
+
+
+def _infer_project_ids(
+    conn: sqlite3.Connection,
+    jsonl_path: Path
+) -> Tuple[Optional[int], Optional[int], Optional[str], Optional[str]]:
+    """Infer project/sub-project IDs from a JSONL path."""
+    hints = [_decode_project_hint(jsonl_path), str(jsonl_path)]
+    seen = set()
+
+    for hint in hints:
+        if hint in seen:
+            continue
+        seen.add(hint)
+
+        proj_canonical, sub_canonical = map_session(hint)
+        proj_row = conn.execute(
+            "SELECT id, canonical_name FROM kb_projects WHERE canonical_name = ?",
+            (proj_canonical,),
+        ).fetchone()
+        if not proj_row:
+            continue
+
+        project_id = proj_row[0]
+        sub_row = conn.execute(
+            """SELECT id FROM kb_sub_projects
+               WHERE project_id = ? AND canonical_name = ?""",
+            (project_id, sub_canonical),
+        ).fetchone()
+
+        return project_id, (sub_row[0] if sub_row else None), hint, proj_row[1]
+
+    return None, None, None, None
+
+
+def get_session_id_for_uuid(
+    conn: sqlite3.Connection,
+    session_uuid: str,
+    jsonl_path: Optional[Path] = None
+) -> Optional[int]:
     """Get internal session_id from session_uuid, creating entry if needed.
 
     Args:
         conn: Database connection
         session_uuid: UUID from JSONL filename
+        jsonl_path: Optional JSONL path used to infer project assignment.
 
     Returns:
         Internal session_id or None if creation failed
     """
     # Check if session exists
     cursor = conn.execute(
-        "SELECT id FROM kb_sessions WHERE session_uuid = ?",
+        "SELECT id, project_id FROM kb_sessions WHERE session_uuid = ?",
         (session_uuid,)
     )
     row = cursor.fetchone()
     if row:
-        return row[0]
+        session_id = row[0]
+        project_id = row[1]
+        if project_id is None and jsonl_path:
+            inferred_project_id, inferred_sub_id, hint_path, inferred_project = _infer_project_ids(
+                conn, jsonl_path
+            )
+            if inferred_project_id is not None:
+                conn.execute(
+                    """UPDATE kb_sessions
+                       SET project_id = ?, sub_project_id = ?,
+                           project_path = COALESCE(project_path, ?),
+                           project_name_original = COALESCE(project_name_original, ?),
+                           updated_at = CURRENT_TIMESTAMP
+                       WHERE id = ?""",
+                    (
+                        inferred_project_id,
+                        inferred_sub_id,
+                        hint_path,
+                        inferred_project,
+                        session_id,
+                    ),
+                )
+        return session_id
 
     # Create new session entry
     try:
+        project_id = None
+        sub_project_id = None
+        hint_path = None
+        inferred_project = None
+        if jsonl_path:
+            project_id, sub_project_id, hint_path, inferred_project = _infer_project_ids(conn, jsonl_path)
+
+        if project_id is None:
+            fallback = conn.execute(
+                "SELECT id FROM kb_projects WHERE canonical_name = 'exploration'"
+            ).fetchone()
+            project_id = fallback[0] if fallback else None
+            sub_fallback = conn.execute(
+                """SELECT id FROM kb_sub_projects
+                   WHERE project_id = ? AND canonical_name = 'root'""",
+                (project_id,),
+            ).fetchone() if project_id else None
+            sub_project_id = sub_fallback[0] if sub_fallback else None
+            inferred_project = inferred_project or "exploration"
+
         cursor = conn.execute(
-            "INSERT INTO kb_sessions (session_uuid) VALUES (?)",
-            (session_uuid,)
+            """INSERT INTO kb_sessions
+               (session_uuid, project_id, sub_project_id, project_path, project_name_original)
+               VALUES (?, ?, ?, ?, ?)""",
+            (session_uuid, project_id, sub_project_id, hint_path, inferred_project)
         )
         return cursor.lastrowid
     except sqlite3.IntegrityError:
@@ -83,6 +182,61 @@ def get_session_id_for_uuid(conn: sqlite3.Connection, session_uuid: str) -> Opti
         )
         row = cursor.fetchone()
         return row[0] if row else None
+
+
+def _backfill_missing_project_assignments(
+    kb_conn: sqlite3.Connection,
+    all_jsonls: list[Tuple[Path, str]]
+) -> int:
+    """Backfill project assignments for sessions that were created without taxonomy mapping."""
+    uuid_to_path = {}
+    for jsonl_path, session_uuid in all_jsonls:
+        uuid_to_path.setdefault(session_uuid, jsonl_path)
+
+    rows = kb_conn.execute(
+        "SELECT id, session_uuid FROM kb_sessions WHERE project_id IS NULL"
+    ).fetchall()
+
+    updated = 0
+    for row in rows:
+        session_id, session_uuid = row
+        jsonl_path = uuid_to_path.get(session_uuid)
+        if not jsonl_path:
+            continue
+
+        project_id, sub_project_id, hint_path, inferred_project = _infer_project_ids(kb_conn, jsonl_path)
+        if project_id is None:
+            fallback = kb_conn.execute(
+                "SELECT id FROM kb_projects WHERE canonical_name = 'exploration'"
+            ).fetchone()
+            project_id = fallback[0] if fallback else None
+            sub_fallback = kb_conn.execute(
+                """SELECT id FROM kb_sub_projects
+                   WHERE project_id = ? AND canonical_name = 'root'""",
+                (project_id,),
+            ).fetchone() if project_id else None
+            sub_project_id = sub_fallback[0] if sub_fallback else None
+            inferred_project = inferred_project or "exploration"
+
+        if project_id is None:
+            continue
+
+        kb_conn.execute(
+            """UPDATE kb_sessions
+               SET project_id = ?,
+                   sub_project_id = COALESCE(sub_project_id, ?),
+                   project_path = COALESCE(project_path, ?),
+                   project_name_original = COALESCE(project_name_original, ?),
+                   updated_at = CURRENT_TIMESTAMP
+               WHERE id = ?""",
+            (project_id, sub_project_id, hint_path, inferred_project, session_id),
+        )
+        updated += 1
+
+    if updated:
+        kb_conn.commit()
+
+    return updated
 
 
 def extract_text_content(content_list) -> str:
@@ -422,6 +576,18 @@ def index_all_messages(resume: bool = True) -> dict:
     }
 
     try:
+        # Find all JSONL files
+        all_jsonls = list(find_all_jsonl())
+        stats['total_files_found'] = len(all_jsonls)
+
+        if not resume:
+            # Full rebuild mode must not duplicate existing message rows.
+            kb_conn.execute("DELETE FROM kb_messages")
+            kb_conn.commit()
+
+        # Repair any legacy sessions created without project mapping.
+        repaired = _backfill_missing_project_assignments(kb_conn, all_jsonls)
+
         # Get set of sessions that already have messages in kb_messages table
         indexed_sessions = set()
         if resume:
@@ -431,13 +597,11 @@ def index_all_messages(resume: bool = True) -> dict:
             )
             indexed_sessions = {row[0] for row in cursor.fetchall()}
 
-        # Find all JSONL files
-        all_jsonls = list(find_all_jsonl())
-        stats['total_files_found'] = len(all_jsonls)
-
         print(f"Found {stats['total_files_found']} JSONL files")
         if resume:
             print(f"Already indexed: {len(indexed_sessions)} sessions")
+        if repaired:
+            print(f"Backfilled taxonomy for {repaired} orphan sessions")
 
         # Process in batches for safe commits
         batch_size = 50
@@ -452,7 +616,7 @@ def index_all_messages(resume: bool = True) -> dict:
                     continue
 
                 # Get or create session ID
-                session_id = get_session_id_for_uuid(kb_conn, session_uuid)
+                session_id = get_session_id_for_uuid(kb_conn, session_uuid, jsonl_path=jsonl_path)
                 if session_id is None:
                     stats['errors'] += 1
                     print(f"Failed to get session ID for {session_uuid}")

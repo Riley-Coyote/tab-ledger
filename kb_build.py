@@ -22,7 +22,7 @@ Usage:
 import argparse
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -70,7 +70,7 @@ def stage_3_fts():
     # Update progress
     kb.execute(
         "UPDATE kb_progress SET status='running', started_at=? WHERE stage='fts_build'",
-        (datetime.utcnow().isoformat(),)
+        (datetime.now(timezone.utc).isoformat(),)
     )
     kb.commit()
 
@@ -149,7 +149,7 @@ def stage_3_fts():
             status='completed', processed=?, total=?,
             completed_at=?, notes=?
         WHERE stage='fts_build'
-    """, (total, total, datetime.utcnow().isoformat(),
+    """, (total, total, datetime.now(timezone.utc).isoformat(),
           f"Indexed {total_indexed} messages + {summary_count} summaries"))
     kb.commit()
     kb.close()
@@ -290,7 +290,7 @@ def stage_7_verify():
             status='completed', processed=?, total=?,
             completed_at=?, notes=?
         WHERE stage='verification'
-    """, (passed, total, datetime.utcnow().isoformat(),
+    """, (passed, total, datetime.now(timezone.utc).isoformat(),
           f"{passed}/{total} checks passed"))
     kb_w.commit()
     kb_w.close()
@@ -299,6 +299,27 @@ def stage_7_verify():
         print(f"\n  WARNING: {total - passed} checks failed!")
     else:
         print(f"\n  All checks passed. Knowledge base is ready.")
+
+
+def stage_8_semantic(provider: str, model: str | None = None, include_messages: bool = False):
+    """Build/refresh semantic embedding index."""
+    print("\n" + "=" * 60)
+    print("STAGE 8: SEMANTIC INDEXING")
+    print("=" * 60)
+    from kb_schema import get_kb_db
+    from kb_semantic import create_embedding_provider, build_semantic_index
+
+    kb = get_kb_db()
+    try:
+        embedder = create_embedding_provider(provider, model=model)
+        result = build_semantic_index(
+            kb,
+            provider=embedder,
+            include_messages=include_messages,
+        )
+    finally:
+        kb.close()
+    print(f"\nResult: {result}")
 
 
 STAGES = [
@@ -323,10 +344,13 @@ Stages:
   1  Taxonomy & session import
   2  Message indexing (parse all JSONLs)
   3  FTS index build
-  4  Summarization (API calls - requires ANTHROPIC_API_KEY)
+  4  Summarization (Claude CLI/API calls)
   5  Cross-session linking
   6  Auxiliary data (commands, plans, todos, teams)
   7  Verification
+
+Optional:
+  --semantic-provider hash|ollama|openai  Run semantic index stage after stage 7
         """
     )
     parser.add_argument("--from", type=int, dest="from_stage", default=0,
@@ -337,6 +361,12 @@ Stages:
                         help="Skip stage 4 (summarization / API calls)")
     parser.add_argument("--drop", action="store_true",
                         help="Drop and rebuild the knowledge base from scratch")
+    parser.add_argument("--semantic-provider", default=None,
+                        help="Optional semantic embedding provider to run after stage 7 (hash|ollama|openai)")
+    parser.add_argument("--semantic-model", default=None,
+                        help="Optional semantic model override")
+    parser.add_argument("--semantic-include-messages", action="store_true",
+                        help="Include long message bodies in semantic index (larger index)")
 
     args = parser.parse_args()
 
@@ -368,6 +398,24 @@ Stages:
             import traceback
             traceback.print_exc()
             print(f"\n  To resume from this stage: python3 kb_build.py --from {stage_num}")
+            sys.exit(1)
+
+    if args.semantic_provider:
+        try:
+            stage_8_semantic(
+                provider=args.semantic_provider,
+                model=args.semantic_model,
+                include_messages=args.semantic_include_messages,
+            )
+        except Exception as e:
+            print(f"\n  ERROR in stage 8 (Semantic indexing): {e}")
+            import traceback
+            traceback.print_exc()
+            print("\n  You can rerun semantic stage with:")
+            print(
+                "  python3 kb_semantic.py index --provider "
+                f"{args.semantic_provider}"
+            )
             sys.exit(1)
 
     elapsed = time.time() - start_time

@@ -8,9 +8,11 @@ CLI usage:
     python3 kb_query.py project <name> [--human]
     python3 kb_query.py session <uuid> [--human]
     python3 kb_query.py search <query> [--project <name>] [--type <source_type>] [--limit N] [--human]
+    python3 kb_query.py semantic <query> [--project <name>] [--type <source_type>] [--provider hash|ollama|openai]
     python3 kb_query.py timeline <project> [--sub <sub_project>] [--limit N] [--human]
     python3 kb_query.py recent [N] [--human]
     python3 kb_query.py context <project> [--human]
+    python3 kb_query.py memory <project> [semantic query]
     python3 kb_query.py iterations <project> [--human]
     python3 kb_query.py related <session-uuid> [--human]
     python3 kb_query.py stats [--project <name>] [--human]
@@ -25,6 +27,7 @@ Python API:
 
 import argparse
 import json
+import os
 import sqlite3
 import sys
 from datetime import datetime
@@ -286,6 +289,135 @@ class KnowledgeBase:
 
         return results
 
+    def _semantic_table_exists(self) -> bool:
+        try:
+            row = self.conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='kb_embeddings' LIMIT 1"
+            ).fetchone()
+            return bool(row)
+        except sqlite3.Error:
+            return False
+
+    def _list_embedding_models(self) -> List[str]:
+        if not self._semantic_table_exists():
+            return []
+        try:
+            rows = self.conn.execute(
+                """
+                SELECT embedding_model, COUNT(*) AS cnt
+                FROM kb_embeddings
+                GROUP BY embedding_model
+                ORDER BY cnt DESC, embedding_model
+                """
+            ).fetchall()
+        except sqlite3.Error:
+            return []
+        return [str(row["embedding_model"]) for row in rows if row["embedding_model"]]
+
+    @staticmethod
+    def _is_openai_embedding_model(model_name: str) -> bool:
+        name = (model_name or "").strip().lower()
+        return name.startswith("text-embedding-")
+
+    @staticmethod
+    def _is_hash_embedding_model(model_name: str) -> bool:
+        return (model_name or "").strip().lower().startswith("hash-")
+
+    @classmethod
+    def _is_ollama_embedding_model(cls, model_name: str) -> bool:
+        name = (model_name or "").strip().lower()
+        if not name:
+            return False
+        if cls._is_hash_embedding_model(name) or cls._is_openai_embedding_model(name):
+            return False
+        return True
+
+    def _pick_model_for_provider(self, provider_name: str, models: List[str]) -> Optional[str]:
+        if not models:
+            return None
+        if provider_name == "hash":
+            return next((m for m in models if self._is_hash_embedding_model(m)), None)
+        if provider_name == "openai":
+            return next((m for m in models if self._is_openai_embedding_model(m)), None)
+        if provider_name == "ollama":
+            return next((m for m in models if self._is_ollama_embedding_model(m)), None)
+        return None
+
+    def _resolve_semantic_provider_model(
+        self,
+        provider: Optional[str],
+        model: Optional[str],
+    ) -> Tuple[str, Optional[str]]:
+        provider_name = (provider or os.getenv("KB_SEMANTIC_PROVIDER") or "").strip().lower() or None
+        model_name = (model or os.getenv("KB_SEMANTIC_MODEL") or "").strip() or None
+        models = self._list_embedding_models()
+
+        if not provider_name:
+            hash_model = self._pick_model_for_provider("hash", models)
+            if hash_model:
+                return "hash", hash_model
+
+            openai_model = self._pick_model_for_provider("openai", models)
+            if openai_model and os.getenv("OPENAI_API_KEY"):
+                return "openai", openai_model
+
+            ollama_model = self._pick_model_for_provider("ollama", models)
+            if ollama_model:
+                return "ollama", ollama_model
+
+            return "hash", model_name
+
+        if not model_name:
+            model_name = self._pick_model_for_provider(provider_name, models)
+
+        # Graceful fallback when openai model exists but no API key configured.
+        if provider_name == "openai" and not os.getenv("OPENAI_API_KEY"):
+            hash_model = self._pick_model_for_provider("hash", models)
+            if hash_model:
+                return "hash", hash_model
+            return "hash", model_name
+
+        return provider_name, model_name
+
+    def semantic_search(
+        self,
+        query: str,
+        project: Optional[str] = None,
+        source_type: Optional[str] = None,
+        limit: int = 20,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+        min_score: float = 0.18,
+    ) -> List[Dict[str, Any]]:
+        """Semantic search across indexed memory artifacts."""
+        from kb_semantic import create_embedding_provider, semantic_search as semantic_search_impl
+
+        if not self._semantic_table_exists():
+            return []
+
+        provider_name, model_name = self._resolve_semantic_provider_model(provider, model)
+        try:
+            embedder = create_embedding_provider(provider_name, model=model_name)
+        except Exception:
+            # Last-resort fallback for local-only continuity when provider setup is missing.
+            fallback_model = self._pick_model_for_provider("hash", self._list_embedding_models()) or model_name
+            embedder = create_embedding_provider("hash", model=fallback_model)
+
+        try:
+            return semantic_search_impl(
+                self.conn,
+                query=query,
+                provider=embedder,
+                project=project,
+                source_type=source_type,
+                limit=limit,
+                min_score=min_score,
+            )
+        except sqlite3.OperationalError as e:
+            if "no such table: kb_embeddings" in str(e).lower():
+                return []
+            raise
+
     # ═══════════════════════════════════════════════════════════════════════════
     # TIMELINE & CHRONOLOGY
     # ═══════════════════════════════════════════════════════════════════════════
@@ -321,6 +453,7 @@ class KnowledgeBase:
                 first_prompt
             FROM kb_sessions
             WHERE project_id = (SELECT id FROM kb_projects WHERE canonical_name = ?)
+              AND started_at IS NOT NULL
         """
         params = [project]
 
@@ -403,6 +536,7 @@ class KnowledgeBase:
                 ended_at,
                 summary_text,
                 summary_json,
+                first_prompt,
                 phase,
                 outcome
             FROM kb_sessions
@@ -417,6 +551,7 @@ class KnowledgeBase:
             "next_steps": [],
             "blockers": [],
             "recent_decisions": [],
+            "decisions": [],
             "related_sessions": [],
         }
 
@@ -434,7 +569,9 @@ class KnowledgeBase:
                 if isinstance(summary_obj, dict):
                     context["next_steps"] = summary_obj.get("next_steps", [])
                     context["blockers"] = summary_obj.get("blockers", [])
-                    context["decisions"] = summary_obj.get("decisions", [])
+                    decisions = summary_obj.get("decisions", [])
+                    context["recent_decisions"] = decisions
+                    context["decisions"] = decisions
             except json.JSONDecodeError:
                 pass
 
@@ -511,6 +648,26 @@ class KnowledgeBase:
                 iteration["sessions"] = [dict(row) for row in sessions]
 
         return iterations
+
+    def get_memory_packet(
+        self,
+        project: str,
+        semantic_query: Optional[str] = None,
+        semantic_limit: int = 10,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Build a continuity packet for natural memory persistence."""
+        from kb_memory import build_memory_packet
+
+        return build_memory_packet(
+            self,
+            project=project,
+            semantic_query=semantic_query,
+            semantic_limit=semantic_limit,
+            provider=provider,
+            model=model,
+        )
 
     # ═══════════════════════════════════════════════════════════════════════════
     # CONNECTIONS & RELATIONSHIPS
@@ -833,6 +990,8 @@ Examples:
   kb_query.py project polyphonic --human
   kb_query.py session a1b2c3d4 --human
   kb_query.py search "websocket auth" --project vessel --limit 10
+  kb_query.py semantic "auth handshake failure" --project vessel --limit 8
+  kb_query.py memory vessel
   kb_query.py timeline polyphonic --limit 20 --human
   kb_query.py recent 15 --human
   kb_query.py context vessel --human
@@ -850,6 +1009,10 @@ Examples:
     parser.add_argument("--sub", help="Filter by sub-project name")
     parser.add_argument("--type", help="Filter by source type (for search)")
     parser.add_argument("--limit", type=int, help="Limit number of results")
+    parser.add_argument("--provider", help="Semantic embedding provider override (hash|ollama|openai)")
+    parser.add_argument("--model", help="Semantic model override")
+    parser.add_argument("--min-score", type=float, default=0.18,
+                        help="Minimum semantic similarity score")
 
     args = parser.parse_args()
 
@@ -905,6 +1068,24 @@ Examples:
             output = formatter.output(result, f"Search Results: '{query}'")
             print(output)
 
+        elif args.command == "semantic":
+            if not args.args:
+                print("Error: semantic command requires a query")
+                sys.exit(1)
+            query = " ".join(args.args)
+            limit = args.limit or 20
+            result = kb.semantic_search(
+                query=query,
+                project=args.project,
+                source_type=args.type,
+                limit=limit,
+                provider=args.provider,
+                model=args.model,
+                min_score=args.min_score,
+            )
+            output = formatter.output(result, f"Semantic Search: '{query}'")
+            print(output)
+
         elif args.command == "timeline":
             if not args.args:
                 print("Error: timeline command requires a project name")
@@ -942,6 +1123,25 @@ Examples:
             output = formatter.output(result, f"Continuation Context: {project_name}")
             print(output)
 
+        elif args.command == "memory":
+            if not args.args:
+                print("Error: memory command requires a project name")
+                sys.exit(1)
+            project_name = args.args[0]
+            semantic_query = " ".join(args.args[1:]).strip() if len(args.args) > 1 else None
+            result = kb.get_memory_packet(
+                project=project_name,
+                semantic_query=semantic_query,
+                semantic_limit=args.limit or 10,
+                provider=args.provider,
+                model=args.model,
+            )
+            if "error" in result:
+                print(f"Error: {result['error']}")
+                sys.exit(1)
+            output = formatter.output(result, f"Memory Continuity Packet: {project_name}")
+            print(output)
+
         elif args.command == "iterations":
             if not args.args:
                 print("Error: iterations command requires a project name")
@@ -972,8 +1172,8 @@ Examples:
         else:
             print(f"Error: Unknown command '{args.command}'")
             print("\nAvailable commands:")
-            print("  projects, project, session, search, timeline, recent")
-            print("  context, iterations, related, stats")
+            print("  projects, project, session, search, semantic, timeline, recent")
+            print("  context, memory, iterations, related, stats")
             sys.exit(1)
 
     except Exception as e:

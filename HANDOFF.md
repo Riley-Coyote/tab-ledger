@@ -28,12 +28,11 @@ ls -la ~/.tab-ledger/ledger.db
 # Verify JSONL source files exist
 ls ~/.claude/projects/ | head -20
 
-# Verify anthropic SDK is installed (needed for stage 4)
-python3 -c "import anthropic; print('OK')"
-# If not: pip install anthropic
+# Verify Claude CLI is installed (needed for stage 4)
+claude --version
 
-# Verify ANTHROPIC_API_KEY is set (needed for stage 4 only)
-echo $ANTHROPIC_API_KEY | head -c 10
+# Verify Claude CLI is authenticated
+claude -p "reply with ok" --no-session-persistence
 ```
 
 ## Execution
@@ -46,6 +45,14 @@ python3 kb_build.py
 ```
 
 This runs all 8 stages in sequence. Takes ~30-60 minutes depending on machine speed and API rate limits. Stage 4 (summarization) is the longest due to API calls.
+
+Optional semantic indexing pass (stage 8):
+
+```bash
+python3 kb_build.py --semantic-provider hash
+# or: --semantic-provider ollama
+# or: --semantic-provider openai
+```
 
 ### Option B: Skip Summarization (Faster, No API Costs)
 
@@ -78,18 +85,19 @@ Destroys the existing knowledge_base.db and rebuilds from scratch. Use if the sc
 
 | Stage | Name | What It Does | Duration | API? |
 |-------|------|-------------|----------|------|
-| 0 | Schema | Creates knowledge_base.db with 13 tables + 17 indexes | <1s | No |
+| 0 | Schema | Creates knowledge_base.db with core + semantic tables | <1s | No |
 | 1 | Taxonomy | Maps 1,290 sessions → 12 projects, imports from ledger.db | ~5s | No |
 | 2 | Messages | Parses all 1,277 JSONL files, indexes messages into kb_messages | 10-30 min | No |
 | 3 | FTS | Builds FTS5 full-text search index from messages + summaries | ~2 min | No |
-| 4 | Summarize | Calls Anthropic API to generate structured summaries | 20-40 min | **Yes** |
+| 4 | Summarize | Calls Claude CLI to generate structured summaries | 20-40 min | **Yes** |
 | 5 | Linking | Detects parent-child, same-slug, continuation, branch connections | ~1 min | No |
 | 6 | Auxiliary | Indexes commands, plans, todos, teams, claude.ai conversations | ~30s | No |
 | 7 | Verify | Runs 9 integrity checks and prints summary | <1s | No |
+| 8 | Semantic (optional) | Builds semantic embedding index for conceptual retrieval | 10s-5m | Optional |
 
 ## Stage 4 Details (Summarization)
 
-This is the expensive stage. It calls the Anthropic API for every unsummarized session.
+This is the expensive stage. It calls Claude via the local authenticated CLI for every unsummarized session.
 
 - **Two-tier model selection**: Opus for major projects (polyphonic, sanctuary, sigil, nexus, vessel, clawdbot, vektor, anima, data-research), Haiku for minor/ad-hoc
 - **Intelligent content sampling**: Adjusts extraction strategy based on JSONL file size
@@ -140,6 +148,12 @@ python3 kb_query.py project polyphonic --human
 # Full-text search
 python3 kb_query.py search "websocket authentication" --human
 
+# Semantic search
+python3 kb_query.py semantic "oauth callback bug in websocket flow" --project vessel --human
+
+# Continuity packet (timeline + blockers + semantic anchors)
+python3 kb_query.py memory vessel
+
 # Get continuation context for an agent
 python3 kb_query.py context vessel
 
@@ -170,6 +184,12 @@ results = kb.search("SIGIL proof of authenticity")
 for r in results:
     print(r["session_uuid"], r["text"][:100])
 
+# Semantic search
+semantic = kb.semantic_search("oauth callback bug in websocket flow", project="vessel", limit=8)
+
+# Memory continuity packet
+memory = kb.get_memory_packet("vessel")
+
 # Get full project info
 project = kb.get_project("sanctuary")
 print(f"Sessions: {project['total_sessions']}, Cost: ${project['total_cost_usd']}")
@@ -189,7 +209,7 @@ After a successful build, you'll have:
 ~/.tab-ledger/ledger.db            # Unchanged — original session catalog
 ```
 
-The knowledge_base.db contains 13 tables:
+The knowledge_base.db contains core tables plus semantic embeddings:
 
 | Table | Purpose |
 |-------|---------|
@@ -199,6 +219,7 @@ The knowledge_base.db contains 13 tables:
 | kb_messages | All indexed messages from JSONL files |
 | kb_fts | FTS5 full-text search index (messages + summaries + commands + plans) |
 | kb_connections | Cross-session relationship graph |
+| kb_embeddings | Semantic embedding vectors for conceptual retrieval |
 | kb_commands | Command history (2,444 entries) |
 | kb_plans | Plans from ~/.claude/plans/ (39 files) |
 | kb_todos | Todo lists from ~/.claude/todos/ (149 non-empty) |
@@ -221,6 +242,8 @@ Query it using:
 ```bash
 python3 ~/.tab-ledger/kb_query.py context <project>  # Get continuation context
 python3 ~/.tab-ledger/kb_query.py search "<query>"    # Full-text search
+python3 ~/.tab-ledger/kb_query.py semantic "<query>"  # Semantic search
+python3 ~/.tab-ledger/kb_query.py memory <project>    # Continuity packet
 python3 ~/.tab-ledger/kb_query.py projects            # List all projects
 ```
 

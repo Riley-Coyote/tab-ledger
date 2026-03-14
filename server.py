@@ -11,10 +11,12 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.concurrency import run_in_threadpool
 
 from snapshot import init_db, take_snapshot, LEDGER_DB
 from cc_indexer import index_all
 from categorizer import get_category_colors
+from kb_query import KnowledgeBase
 
 app = FastAPI(title="Tab Ledger")
 
@@ -53,7 +55,7 @@ async def api_take_snapshot(request: Request):
     except Exception:
         pass
     note = body.get("note", None)
-    result = take_snapshot(source="manual", note=note)
+    result = await run_in_threadpool(take_snapshot, "manual", note)
     return result
 
 
@@ -105,7 +107,7 @@ async def api_right_now():
     if not latest:
         conn.close()
         # Take first snapshot
-        result = take_snapshot(source="auto")
+        await run_in_threadpool(take_snapshot, "auto")
         conn = get_db()
         latest = conn.execute(
             "SELECT * FROM snapshots ORDER BY taken_at DESC LIMIT 1"
@@ -500,7 +502,7 @@ async def api_categories():
 @app.post("/api/reindex")
 async def api_reindex(force: bool = False):
     """Re-index Claude Code sessions."""
-    result = index_all(force=force)
+    result = await run_in_threadpool(index_all, force)
     return result
 
 
@@ -727,6 +729,68 @@ async def api_cc_models():
         "models": [dict(m) for m in models],
         "daily": [dict(d) for d in daily],
     }
+
+
+# ─── API: Semantic Memory ───────────────────────────────
+
+@app.get("/api/kb/semantic")
+async def api_kb_semantic(
+    q: str,
+    project: str = None,
+    source_type: str = None,
+    limit: int = 20,
+    provider: str = None,
+    model: str = None,
+    min_score: float = 0.18,
+):
+    """Semantic search over KB embeddings."""
+
+    def _run():
+        with KnowledgeBase(readonly=True) as kb:
+            return kb.semantic_search(
+                query=q,
+                project=project,
+                source_type=source_type,
+                limit=limit,
+                provider=provider,
+                model=model,
+                min_score=min_score,
+            )
+
+    results = await run_in_threadpool(_run)
+    return {
+        "query": q,
+        "project": project,
+        "source_type": source_type,
+        "count": len(results),
+        "results": results,
+    }
+
+
+@app.get("/api/kb/memory/{project}")
+async def api_kb_memory(
+    project: str,
+    semantic_query: str = None,
+    semantic_limit: int = 10,
+    provider: str = None,
+    model: str = None,
+):
+    """High-signal continuity packet for project resumption."""
+
+    def _run():
+        with KnowledgeBase(readonly=True) as kb:
+            return kb.get_memory_packet(
+                project=project,
+                semantic_query=semantic_query,
+                semantic_limit=semantic_limit,
+                provider=provider,
+                model=model,
+            )
+
+    result = await run_in_threadpool(_run)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return result
 
 
 # ─── Startup ──────────────────────────────────────────────

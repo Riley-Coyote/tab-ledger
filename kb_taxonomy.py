@@ -296,7 +296,7 @@ def build_taxonomy():
         # We'll populate these in the indexer stage
 
         kb.execute("""
-            INSERT OR REPLACE INTO kb_sessions (
+            INSERT INTO kb_sessions (
                 session_uuid, project_id, sub_project_id,
                 project_path, project_name_original, git_branch, slug, model,
                 started_at, ended_at, message_count, turn_count, is_sidechain,
@@ -311,6 +311,30 @@ def build_taxonomy():
                 ?, ?, ?, ?,
                 ?, ?
             )
+            ON CONFLICT(session_uuid) DO UPDATE SET
+                project_id = excluded.project_id,
+                sub_project_id = excluded.sub_project_id,
+                project_path = excluded.project_path,
+                project_name_original = excluded.project_name_original,
+                git_branch = excluded.git_branch,
+                slug = excluded.slug,
+                model = excluded.model,
+                started_at = excluded.started_at,
+                ended_at = excluded.ended_at,
+                message_count = excluded.message_count,
+                turn_count = excluded.turn_count,
+                is_sidechain = excluded.is_sidechain,
+                input_tokens = excluded.input_tokens,
+                output_tokens = excluded.output_tokens,
+                cache_creation_tokens = excluded.cache_creation_tokens,
+                cache_read_tokens = excluded.cache_read_tokens,
+                total_duration_ms = excluded.total_duration_ms,
+                cost_usd = excluded.cost_usd,
+                tools_used = excluded.tools_used,
+                tool_call_count = excluded.tool_call_count,
+                first_prompt = excluded.first_prompt,
+                cc_version = excluded.cc_version,
+                updated_at = CURRENT_TIMESTAMP
         """, (
             sess["session_id"], pid, sid,
             sess["project_path"], sess["project_name"], sess["git_branch"],

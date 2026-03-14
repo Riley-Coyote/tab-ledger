@@ -1,18 +1,23 @@
-# Databases (contain personal session data)
+# Databases and runtime artifacts
 *.db
 *.db-shm
 *.db-wal
-
-# Logs
 *.log
-
-# Runtime
 *.pid
+
+# Python
 __pycache__/
 *.pyc
+.pytest_cache/
+.venv/
+venv/
 
-# OS
-.DS_Store
-
-# Environment
+# Environment and local config
 .env
+
+# OS/editor
+.DS_Store
+.playwright-mcp/
+
+# Screenshots (dev artifacts)
+*.png

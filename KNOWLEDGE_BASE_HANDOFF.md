@@ -50,6 +50,12 @@ python3 ~/.tab-ledger/kb_query.py context polyphonic
 # Full-text search across all sessions
 python3 ~/.tab-ledger/kb_query.py search "websocket authentication"
 
+# Semantic search (conceptual retrieval)
+python3 ~/.tab-ledger/kb_query.py semantic "oauth callback bug in websocket flow" --project vessel
+
+# Continuity packet (timeline + blockers + semantic anchors)
+python3 ~/.tab-ledger/kb_query.py memory vessel
+
 # Search within a specific project
 python3 ~/.tab-ledger/kb_query.py search "database migration" --project vessel
 
@@ -90,6 +96,12 @@ context = kb.get_continuation_context("polyphonic")
 
 # Full-text search (FTS5 syntax: AND, OR, NOT, quotes for phrases)
 results = kb.search("websocket OR authentication", project="vessel", limit=10)
+
+# Semantic search
+semantic = kb.semantic_search("oauth callback bug in websocket flow", project="vessel", limit=8)
+
+# Memory continuity packet
+memory = kb.get_memory_packet("vessel")
 
 # Session detail by UUID prefix
 session = kb.get_session("a1b2c3d4")
@@ -170,7 +182,7 @@ timestamp TIMESTAMP
 ```
 text TEXT                   -- Searchable content
 session_uuid TEXT           -- Links back to session
-source_type TEXT            -- 'summary', 'message', 'code', 'plan'
+source_type TEXT            -- 'summary', 'message', 'prompt', 'plan', 'todo'
 project_name TEXT           -- Canonical project name
 ```
 
@@ -185,6 +197,20 @@ target_session_id INTEGER
 connection_type TEXT        -- e.g. 'continuation', 'related', 'references'
 strength REAL               -- 0.0 to 1.0
 reason TEXT
+```
+
+**`kb_embeddings`** — Semantic embedding index for conceptual retrieval.
+```
+source_key TEXT UNIQUE      -- e.g. 'summary:<session_uuid>', 'plan:<filename>'
+session_uuid TEXT
+source_type TEXT            -- summary|prompt|plan|todo|message
+project_name TEXT
+text_hash TEXT              -- Detects changes for incremental re-embedding
+embedding BLOB              -- Float32 vector bytes
+embedding_norm REAL
+embedding_dim INTEGER
+embedding_model TEXT        -- hash-768 | text-embedding-3-small | nomic-embed-text, etc.
+metadata_json TEXT
 ```
 
 ### Auxiliary Tables

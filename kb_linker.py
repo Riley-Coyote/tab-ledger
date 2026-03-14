@@ -44,7 +44,7 @@ def load_jsonl_file(path: Path) -> List[Dict]:
     return records
 
 
-def get_parent_child_map() -> Dict[str, List[str]]:
+def get_parent_child_map() -> Dict[str, str]:
     """
     Build a map of parent session UUIDs to their subagent session UUIDs.
 
@@ -59,68 +59,44 @@ def get_parent_child_map() -> Dict[str, List[str]]:
 
     Returns: {agent_uuid: parent_uuid} mapping
     """
-    # Collect subagent UUIDs grouped by project directory
-    project_subagents: Dict[str, List[str]] = {}  # project_dir_name -> [agent_uuids]
-    project_top_sessions: Dict[str, List[str]] = {}  # project_dir_name -> [session_uuids]
+    parent_map: Dict[str, str] = {}
 
     if not CLAUDE_PROJECTS.exists():
         logger.info(f"Projects directory not found: {CLAUDE_PROJECTS}")
-        return {}
+        return parent_map
 
     try:
         for project_dir in CLAUDE_PROJECTS.iterdir():
             if not project_dir.is_dir():
                 continue
 
-            dir_name = project_dir.name
+            # Modern Claude layout:
+            #   <project>/<parent-session-uuid>/subagents/<child-session-uuid>.jsonl
+            for jsonl_file in project_dir.glob("*/subagents/*.jsonl"):
+                parent_uuid = jsonl_file.parent.parent.name
+                child_uuid = jsonl_file.stem
+                if parent_uuid and child_uuid:
+                    parent_map[child_uuid] = parent_uuid
 
-            # Collect top-level session UUIDs
-            top_sessions = []
-            for jsonl_file in project_dir.glob("*.jsonl"):
-                top_sessions.append(jsonl_file.stem)
-
-            if top_sessions:
-                project_top_sessions[dir_name] = top_sessions
-
-            # Collect subagent UUIDs
-            subagents_dir = project_dir / "subagents"
-            if subagents_dir.exists():
-                agent_uuids = []
-                for jsonl_file in subagents_dir.glob("*.jsonl"):
-                    agent_uuids.append(jsonl_file.stem)
-
-                if agent_uuids:
-                    project_subagents[dir_name] = agent_uuids
+            # Back-compat layout:
+            #   <project>/subagents/<child-session-uuid>.jsonl
+            legacy_subagents = list((project_dir / "subagents").glob("*.jsonl"))
+            if legacy_subagents:
+                top_level = [f.stem for f in project_dir.glob("*.jsonl")]
+                if len(top_level) == 1:
+                    parent_uuid = top_level[0]
+                    for jsonl_file in legacy_subagents:
+                        parent_map[jsonl_file.stem] = parent_uuid
+                elif top_level:
+                    parent_uuid = top_level[0]
+                    for jsonl_file in legacy_subagents:
+                        parent_map.setdefault(jsonl_file.stem, parent_uuid)
 
     except Exception as e:
         logger.error(f"Error scanning projects directory: {e}")
         return {}
 
-    # Now we have subagent UUIDs grouped by project dir.
-    # For parent-child linking, subagents in a project dir were spawned by
-    # one of the top-level sessions in the same dir. We'll use the database
-    # to find which top-level session is marked as is_sidechain=False and
-    # link subagents accordingly.
-    # Simple heuristic: all subagents in a project dir are children of
-    # all top-level sessions in that dir (we'll refine via temporal overlap).
-
-    parent_map = {}  # agent_uuid -> parent_uuid
-
-    for dir_name, agent_uuids in project_subagents.items():
-        top_sessions = project_top_sessions.get(dir_name, [])
-
-        if len(top_sessions) == 1:
-            # Simple case: only one top-level session, all subagents belong to it
-            for agent_uuid in agent_uuids:
-                parent_map[agent_uuid] = top_sessions[0]
-        elif top_sessions:
-            # Multiple top-level sessions; link each subagent to all parents
-            # (the connection detection will sort by temporal proximity later)
-            for agent_uuid in agent_uuids:
-                # Default to first session; detect_parent_child will refine
-                parent_map[agent_uuid] = top_sessions[0]
-
-    logger.info(f"Found {len(parent_map)} potential parent-child mappings across {len(project_subagents)} project dirs")
+    logger.info(f"Found {len(parent_map)} potential parent-child mappings")
     return parent_map
 
 
@@ -194,7 +170,8 @@ def detect_parent_child(kb_conn: sqlite3.Connection) -> int:
                     f'Subagent relationship: {agent_id} is subagent of {parent_uuid}'
                 )
             )
-            created += 1
+            if cursor.rowcount > 0:
+                created += 1
             logger.debug(f"Created parent-child connection: {parent_session_id} → {child_session_id}")
 
         except Exception as e:
@@ -273,7 +250,8 @@ def detect_same_slug(kb_conn: sqlite3.Connection) -> int:
                         f'Same session resumed: slug={slug}'
                     )
                 )
-                created += 1
+                if cursor.rowcount > 0:
+                    created += 1
                 logger.debug(f"Created same-slug connection: {source_id} → {target_id}")
 
     except Exception as e:
@@ -379,7 +357,8 @@ def detect_continuations(kb_conn: sqlite3.Connection) -> int:
                         f'Continuation: same project, {gap_hours:.2f} hours apart'
                     )
                 )
-                created += 1
+                if cursor.rowcount > 0:
+                    created += 1
                 logger.debug(
                     f"Created continuation connection: {source_id} → {target_id} "
                     f"(gap: {gap_hours:.2f}h, strength: {strength:.3f})"
@@ -471,7 +450,8 @@ def detect_branch_links(kb_conn: sqlite3.Connection) -> int:
                         f'Same branch: project_id={project_id}, branch={git_branch}'
                     )
                 )
-                created += 1
+                if cursor.rowcount > 0:
+                    created += 1
                 logger.debug(
                     f"Created branch connection: {source_id} → {target_id} "
                     f"(branch: {git_branch})"

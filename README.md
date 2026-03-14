@@ -77,6 +77,7 @@ Tab Ledger solves a specific problem: when you run hundreds of AI coding session
 - macOS (uses launchd for scheduling; adaptable to cron on Linux)
 - A Chromium-based browser (Comet, Chrome, Arc, etc.) for tab capture
 - Claude Code (for session indexing — the JSONL files it creates)
+- Claude CLI (`claude` command) authenticated locally for stage 4 summarization
 
 ### Installation
 
@@ -115,7 +116,7 @@ launchctl list | grep tab-ledger
 The KB is a one-time build on top of the ledger data, with an optional nightly refresh:
 
 ```bash
-# Full build (runs all 8 stages)
+# Full build (runs core stages 0-7)
 python3 kb_build.py
 
 # Skip AI summarization if you don't want API costs
@@ -133,10 +134,19 @@ python3 kb_build.py --from 3
 | 1 | Taxonomy | Maps sessions to canonical projects via path matching | Free |
 | 2 | Messages | Parses every JSONL at the message level | Free |
 | 3 | FTS | Builds FTS5 full-text search index | Free |
-| 4 | Summarization | Calls Anthropic API for structured summaries | API costs |
+| 4 | Summarization | Calls Claude CLI for structured summaries | Usage costs |
 | 5 | Linking | Detects cross-session connections | Free |
 | 6 | Auxiliary | Indexes commands, plans, todos, teams | Free |
 | 7 | Verification | 9-point integrity check | Free |
+| 8 | Semantic (optional) | Embedding index for semantic/hybrid memory retrieval | Free (hash/ollama) or API usage (openai) |
+
+Run the optional semantic stage:
+
+```bash
+python3 kb_build.py --semantic-provider hash
+# or: --semantic-provider ollama
+# or: --semantic-provider openai
+```
 
 ### Set Up Nightly Refresh (Optional)
 
@@ -146,6 +156,12 @@ Keep the KB current automatically:
 # Install the nightly refresh agent (runs at 4 AM, skips summarization)
 cp com.rileycoyote.tab-ledger-kb-refresh.plist ~/Library/LaunchAgents/  # Create this from the snapshot plist, pointing to run_kb_refresh.py
 launchctl load ~/Library/LaunchAgents/com.rileycoyote.tab-ledger-kb-refresh.plist
+
+# Optional: enable semantic refresh inside run_kb_refresh.py
+export KB_SEMANTIC_PROVIDER=hash
+# Optional:
+# export KB_SEMANTIC_MODEL=hash-768
+# export KB_SEMANTIC_INCLUDE_MESSAGES=1
 ```
 
 ---
@@ -166,6 +182,9 @@ python3 kb_query.py context polyphonic
 
 # Full-text search across all sessions
 python3 kb_query.py search "websocket authentication"
+
+# Semantic search across memory embeddings
+python3 kb_query.py semantic "oauth callback bug in websocket flow" --project vessel --limit 8
 
 # Search within a specific project
 python3 kb_query.py search "database migration" --project vessel --limit 10
@@ -188,6 +207,9 @@ python3 kb_query.py iterations polyphonic
 
 # Sessions connected to a specific session
 python3 kb_query.py related <session-uuid>
+
+# High-signal continuity packet (timeline + blockers + semantic anchors)
+python3 kb_query.py memory polyphonic
 ```
 
 ### Python API
@@ -205,6 +227,12 @@ context = kb.get_continuation_context("polyphonic")
 
 # Full-text search (FTS5 syntax: AND, OR, NOT, "phrases", prefix*, NEAR())
 results = kb.search("websocket OR authentication", project="vessel", limit=10)
+
+# Semantic search
+semantic = kb.semantic_search("oauth callback bug in websocket flow", project="vessel", limit=8)
+
+# Continuity packet for natural project memory continuity
+memory = kb.get_memory_packet("polyphonic")
 
 # List all projects
 projects = kb.list_projects()
@@ -237,11 +265,13 @@ Register in `~/.claude/settings.json` to make the KB available as tools in every
 }
 ```
 
-This exposes 6 tools to Claude Code and all subagents:
+This exposes 8 tools to Claude Code and all subagents:
 
 | Tool | Purpose |
 |------|---------|
 | `kb_search` | Full-text search across all sessions |
+| `kb_semantic` | Embedding-powered semantic search across memory artifacts |
+| `kb_memory` | Continuity packet for natural project resumption |
 | `kb_context` | Continuation context for resuming work on a project |
 | `kb_session` | Full session detail by UUID prefix |
 | `kb_projects` | List all projects with metadata |
@@ -288,7 +318,29 @@ The most powerful search. Built on SQLite's FTS5 engine with Porter stemming and
 | Filter | `AND project_name = 'vessel'` | Scope to a project |
 | Source | `AND source_type = 'summary'` | Filter by content type |
 
-Source types: `summary`, `message`, `code`, `plan`
+Source types: `summary`, `message`, `prompt`, `plan`, `todo`
+
+### Semantic Search (Embeddings)
+
+Semantic search is available via `kb_query.py semantic` and `/api/kb/semantic`.
+It supports:
+
+- Conceptual recall when exact keywords differ
+- Project and source-type filtering
+- Hybrid ranking (semantic cosine + light FTS boost)
+- Provider options: `hash`, `ollama`, `openai`
+
+`hash` works fully local and deterministic; `ollama` and `openai` provide richer embeddings.
+
+### Memory Continuity Packet
+
+`kb_query.py memory <project>` and `/api/kb/memory/{project}` return a high-signal
+continuity payload:
+
+- Last-session context and timeline
+- Unresolved blockers and deduplicated next steps
+- Connection threads across sessions
+- Semantic anchors (with automatic FTS fallback when semantic index is unavailable)
 
 ### Tab Search (Ledger Layer)
 
@@ -330,6 +382,8 @@ uvicorn server:app --host 127.0.0.1 --port 7777 --reload
 | `/api/digest/{date}` | GET | Daily digest (auto-generated) |
 | `/api/reindex` | POST | Re-index Claude Code sessions |
 | `/api/categories` | GET | Category color mapping |
+| `/api/kb/semantic?q=...` | GET | Semantic search across KB embeddings |
+| `/api/kb/memory/{project}` | GET | Memory continuity packet for a project |
 
 ---
 
@@ -396,7 +450,7 @@ Costs are calculated using per-model pricing:
 
 ## Knowledge Base Build Pipeline
 
-The KB build (`kb_build.py`) is an 8-stage pipeline that enriches raw session data into a searchable knowledge graph.
+The KB build (`kb_build.py`) is an 8-stage core pipeline (0-7) with an optional stage 8 semantic embedding pass.
 
 ### Stage 1: Project Taxonomy
 
@@ -472,17 +526,22 @@ A comprehensive handoff document is available at `KNOWLEDGE_BASE_HANDOFF.md` wit
 | `categorizer.py` | URL and session auto-categorization (20 categories) |
 | `server.py` | FastAPI dashboard and REST API (port 7777) |
 | `run_snapshot.py` | Launchd runner (snapshot + reindex, every 30 min) |
-| `run_kb_refresh.py` | Nightly KB refresh (import + FTS + linking) |
-| `kb_build.py` | 8-stage KB build orchestrator |
+| `run_kb_refresh.py` | Nightly KB refresh (import + FTS + linking + optional semantic indexing) |
+| `kb_build.py` | Core 0-7 KB build orchestrator + optional semantic stage |
 | `kb_schema.py` | Database schema definitions + connection helper |
 | `kb_taxonomy.py` | Project/sub-project path mapping |
 | `kb_indexer.py` | Message-level JSONL indexer for KB |
 | `kb_summarizer.py` | AI summarization (Opus/Haiku two-tier) |
 | `kb_linker.py` | Cross-session connection detection |
 | `kb_auxiliary.py` | Commands, plans, todos, teams indexer |
+| `kb_semantic.py` | Semantic embedding index + semantic/hybrid retrieval |
+| `kb_memory.py` | Continuity packet assembly for natural project resumption |
 | `kb_query.py` | Python API + CLI for querying the KB |
 | `kb_mcp_server.py` | Stdio MCP server for Claude Code integration |
 | `com.rileycoyote.tab-ledger.plist` | macOS launchd agent (30-min snapshots) |
+| `tests/test_kb_hardening.py` | Regression tests for hardening-critical behavior |
+| `.github/workflows/ci.yml` | CI pipeline (compile + pytest) |
+| `requirements-dev.txt` | Dev/test dependencies |
 | `KNOWLEDGE_BASE_HANDOFF.md` | Agent integration reference |
 | `DATA_SPEC.md` | Detailed data specification |
 
@@ -518,9 +577,23 @@ Edit the `StartInterval` in the launchd plist (value is in seconds; default 1800
 
 ---
 
+## Testing
+
+Run local quality checks:
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+python3 -m compileall -q .
+pytest -q
+```
+
+The CI workflow runs these checks on push and pull requests.
+
+---
+
 ## Privacy & Security
 
-- **Everything is local.** No data leaves your machine unless you explicitly run the summarization stage (which calls the Anthropic API with session content).
+- **Everything is local.** No data leaves your machine unless you explicitly run summarization, which sends sampled session context to Claude via your local authenticated CLI.
 - **Databases are gitignored.** The `.gitignore` excludes `*.db`, `*.log`, and `*.pid`.
 - **Read-only by default.** The query API and MCP server open the database in read-only mode.
 - **No telemetry.** No analytics, no tracking, no external services beyond what you configure.

@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tab Ledger — System Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════
+   DESIGN TOKENS — Riley Coyote Design Identity
+   ═══════════════════════════════════════════════════════ */
+:root {
+  --bg-void: #000000;
+  --bg-deep: #050505;
+  --bg-surface: #0a0a0a;
+  --bg-elevated: #111111;
+  --bg-raised: #161616;
+
+  --border-subtle: #1a1a1a;
+  --border-medium: #252525;
+  --border-strong: #333333;
+
+  --text-primary: #ffffff;
+  --text-secondary: #b0b0b0;
+  --text-tertiary: #787878;
+  --text-dim: #505050;
+  --text-ghost: #303030;
+
+  --accent-sage: #c8e6d9;
+  --accent-sage-dim: rgba(200, 230, 217, 0.15);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ═══════════════════════════════════════════════════════
+   RESET & BASE
+   ═══════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-sans);
+  font-weight: 300;
+  background: var(--bg-void);
+  color: var(--text-secondary);
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(200, 230, 217, 0.2);
+  color: var(--text-primary);
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-medium); border-radius: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════ */
+.infographic {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem 6rem;
+}
+
+.section {
+  padding: 4rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.section-label::before {
+  content: attr(data-num);
+  color: var(--text-ghost);
+}
+
+.section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.section-grid {
+  display: grid;
+  gap: 1px;
+  background: var(--border-subtle);
+}
+
+.three-col { grid-template-columns: repeat(3, 1fr); }
+.four-col  { grid-template-columns: repeat(4, 1fr); }
+.two-col   { grid-template-columns: 2fr 3fr; }
+
+/* ═══════════════════════════════════════════════════════
+   CARDS
+   ═══════════════════════════════════════════════════════ */
+.card {
+  background: var(--bg-deep);
+  padding: 1.75rem;
+  position: relative;
+  border-left: 3px solid var(--border-medium);
+  transition: border-color 0.3s ease;
+}
+
+.card:hover {
+  border-left-color: var(--border-strong);
+}
+
+.card-title {
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  margin-bottom: 0.25rem;
+}
+
+.card-file {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 400;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+}
+
+.card-desc {
+  font-size: 0.85rem;
+  font-weight: 300;
+  color: var(--text-tertiary);
+  margin-bottom: 1rem;
+  line-height: 1.75;
+}
+
+.card-detail {
+  font-size: 0.8rem;
+  font-weight: 300;
+  color: var(--text-tertiary);
+  line-height: 1.7;
+}
+
+.card-detail li {
+  list-style: none;
+  padding-left: 1rem;
+  position: relative;
+}
+
+.card-detail li::before {
+  content: '\00B7';
+  position: absolute;
+  left: 0;
+  color: var(--text-ghost);
+}
+
+/* ═══════════════════════════════════════════════════════
+   STAT BADGES
+   ═══════════════════════════════════════════════════════ */
+.stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 0.75rem;
+}
+
+.stat-badge {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border: 1px solid var(--border-medium);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.stat-badge.sage {
+  color: var(--accent-sage);
+  border-color: rgba(200, 230, 217, 0.2);
+}
+
+/* ═══════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════ */
+.hero {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 4rem 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 50% at 50% 50%, rgba(200, 230, 217, 0.02) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.crosshair {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-ghost);
+  user-select: none;
+  opacity: 0;
+  animation: fadeIn 1s ease 1.5s forwards;
+}
+
+.crosshair--tl { top: 2rem; left: 2rem; }
+.crosshair--tr { top: 2rem; right: 2rem; }
+.crosshair--bl { bottom: 2rem; left: 2rem; }
+.crosshair--br { bottom: 2rem; right: 2rem; }
+
+.hero-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 2rem;
+  opacity: 0;
+  animation: fadeIn 0.8s ease 0.3s forwards;
+}
+
+.hero-name {
+  font-family: var(--font-serif);
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 300;
+  font-style: italic;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  text-align: center;
+  opacity: 0;
+  animation: fadeInUp 1s var(--ease-out-expo) 0.6s forwards;
+}
+
+.hero-statement {
+  max-width: 520px;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 300;
+  color: var(--text-tertiary);
+  line-height: 1.8;
+  margin-top: 1.5rem;
+  opacity: 0;
+  animation: fadeIn 1s ease 1s forwards;
+}
+
+.hero-stats {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2.5rem;
+  opacity: 0;
+  animation: fadeIn 1s ease 1.3s forwards;
+}
+
+.hero-line {
+  width: 1px;
+  height: 60px;
+  background: linear-gradient(to bottom, var(--text-ghost), transparent);
+  margin-top: 3rem;
+  opacity: 0;
+  animation: fadeIn 1s ease 1.8s forwards;
+}
+
+/* ═══════════════════════════════════════════════════════
+   FLOW CONNECTORS
+   ═══════════════════════════════════════════════════════ */
+.flow-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem 0;
+}
+
+.flow-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.flow-line {
+  width: 1px;
+  height: 28px;
+  background: linear-gradient(to bottom, transparent, var(--text-ghost));
+}
+
+.flow-head {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--text-ghost);
+}
+
+.flow-label {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  color: var(--text-ghost);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-top: 6px;
+}
+
+.flow-multi {
+  display: flex;
+  gap: 80px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   DATABASE SCHEMA
+   ═══════════════════════════════════════════════════════ */
+.db-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.db-name {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.db-size {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-dim);
+}
+
+.db-layer {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 2px 8px;
+  border: 1px solid var(--border-medium);
+}
+
+.db-layer.sage {
+  color: var(--accent-sage);
+  border-color: rgba(200, 230, 217, 0.2);
+}
+
+.schema-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.schema-table tr {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.schema-table tr:last-child { border-bottom: none; }
+
+.schema-table td {
+  padding: 4px 0;
+  font-size: 0.75rem;
+  font-weight: 300;
+  vertical-align: top;
+}
+
+.schema-table .col-tree {
+  color: var(--text-ghost);
+  width: 18px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding-right: 4px;
+}
+
+.schema-table .col-name {
+  color: var(--text-secondary);
+  font-weight: 400;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+.schema-table .col-count {
+  text-align: right;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  white-space: nowrap;
+}
+
+.schema-table .col-note {
+  color: var(--text-dim);
+  font-size: 0.65rem;
+  padding-left: 8px;
+}
+
+.db-transfer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 1.25rem 0 0;
+  padding: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  border: 1px solid var(--border-subtle);
+}
+
+.db-transfer .arrow-h {
+  display: inline-block;
+  width: 40px;
+  height: 1px;
+  background: var(--accent-sage);
+  position: relative;
+  opacity: 0.4;
+}
+
+.db-transfer .arrow-h::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: -3px;
+  border-left: 5px solid var(--accent-sage);
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  opacity: 0.4;
+}
+
+/* ═══════════════════════════════════════════════════════
+   PIPELINE
+   ═══════════════════════════════════════════════════════ */
+.pipeline-note {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+  margin-bottom: 1.25rem;
+}
+
+.pipeline-track {
+  display: flex;
+  gap: 0;
+}
+
+.pipeline-stage {
+  flex: 1 1 0;
+  min-width: 0;
+  background: var(--bg-deep);
+  border: 1px solid var(--border-subtle);
+  padding: 1rem 0.75rem;
+  transition: border-color 0.3s ease;
+}
+
+.pipeline-stage:hover {
+  border-color: var(--border-medium);
+}
+
+.pipeline-stage.optional {
+  border-style: dashed;
+  opacity: 0.5;
+}
+
+.pipeline-connector {
+  flex: 0 0 auto;
+  width: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-ghost);
+  font-size: 10px;
+}
+
+.stage-num {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: var(--accent-sage);
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.1em;
+}
+
+.stage-name {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-primary);
+  margin-bottom: 0.4rem;
+  line-height: 1.3;
+}
+
+.stage-detail {
+  font-size: 0.65rem;
+  font-weight: 300;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.stage-stat {
+  margin-top: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  letter-spacing: 0.05em;
+}
+
+/* ═══════════════════════════════════════════════════════
+   PRICING TABLE
+   ═══════════════════════════════════════════════════════ */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  gap: 2px 10px;
+  margin-top: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+}
+
+.pricing-grid .model-name {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.pricing-grid .price {
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.pricing-grid .price-header {
+  color: var(--text-ghost);
+  text-align: right;
+  font-size: 0.55rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* ═══════════════════════════════════════════════════════
+   TAGS / PILLS
+   ═══════════════════════════════════════════════════════ */
+.methods-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 0.75rem;
+}
+
+.method-tag {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 400;
+  padding: 2px 6px;
+  color: var(--text-dim);
+  border: 1px solid var(--border-subtle);
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.record-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 0.75rem;
+}
+
+.record-type {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 400;
+  padding: 2px 6px;
+  color: var(--text-dim);
+  border: 1px solid var(--border-subtle);
+}
+
+.field-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 0.5rem;
+}
+
+.field-tag {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  font-weight: 300;
+  padding: 1px 5px;
+  color: var(--text-dim);
+  border: 1px solid var(--border-subtle);
+}
+
+/* ═══════════════════════════════════════════════════════
+   AUTOMATION STRIP
+   ═══════════════════════════════════════════════════════ */
+.auto-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border-subtle);
+}
+
+.auto-item {
+  background: var(--bg-deep);
+  padding: 1.25rem;
+  border-left: 3px solid var(--border-medium);
+}
+
+.auto-label {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.auto-detail {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 300;
+  color: var(--text-dim);
+  line-height: 1.7;
+}
+
+.auto-loop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  color: var(--text-ghost);
+  letter-spacing: 0.1em;
+}
+
+/* ═══════════════════════════════════════════════════════
+   CODE BLOCK (Python API card)
+   ═══════════════════════════════════════════════════════ */
+.code-block {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 300;
+  color: var(--text-dim);
+  line-height: 1.7;
+  margin-top: 0.75rem;
+}
+
+/* ═══════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════ */
+.footer-line {
+  width: 1px;
+  height: 40px;
+  background: linear-gradient(to bottom, var(--text-ghost), transparent);
+  margin: 0 auto 2rem;
+}
+
+.footer {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-ghost);
+  letter-spacing: 0.1em;
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+/* ═══════════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════════ */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* Scroll reveal */
+.reveal {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.6s ease, transform 0.6s var(--ease-out-expo);
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════ */
+@media (max-width: 1100px) {
+  .four-col { grid-template-columns: repeat(2, 1fr); }
+  .pipeline-track { flex-wrap: wrap; gap: 1px; }
+  .pipeline-connector { display: none; }
+  .pipeline-stage { flex: 0 0 calc(25% - 1px); }
+}
+
+@media (max-width: 900px) {
+  .three-col { grid-template-columns: repeat(2, 1fr); }
+  .two-col { grid-template-columns: 1fr; }
+  .auto-strip { grid-template-columns: 1fr; }
+  .pipeline-stage { flex: 0 0 calc(50% - 1px); }
+}
+
+@media (max-width: 600px) {
+  .infographic { padding: 0 1rem 4rem; }
+  .three-col, .four-col, .two-col { grid-template-columns: 1fr; }
+  .flow-multi { gap: 40px; }
+  .hero-name { font-size: 2.5rem; }
+  .pipeline-stage { flex: 0 0 100%; }
+  .hero { min-height: 80vh; }
+}
+</style>
+</head>
+<body>
+<div class="infographic">
+
+  <!-- ═══════════════════════════════════════════════════
+       HERO
+       ═══════════════════════════════════════════════════ -->
+  <div class="hero">
+    <span class="crosshair crosshair--tl">+</span>
+    <span class="crosshair crosshair--tr">+</span>
+    <span class="crosshair crosshair--bl">+</span>
+    <span class="crosshair crosshair--br">+</span>
+
+    <div class="hero-label">System Architecture</div>
+    <h1 class="hero-name">Tab Ledger</h1>
+    <p class="hero-statement">Local-first analytics and knowledge base for Claude Code. Indexes sessions, browser tabs, and AI conversations into searchable, AI-summarized SQLite databases.</p>
+    <div class="hero-stats">
+      <span class="stat-badge">1,275 sessions</span>
+      <span class="stat-badge">5.9 GB indexed</span>
+      <span class="stat-badge">49,517 messages</span>
+      <span class="stat-badge sage">~$12,344 est. cost</span>
+      <span class="stat-badge">12 projects</span>
+      <span class="stat-badge">61 sub-projects</span>
+    </div>
+    <div class="hero-line"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       SECTION 1: DATA SOURCES
+       ═══════════════════════════════════════════════════ -->
+  <section class="section">
+    <div class="section-label" data-num="01">Data Sources</div>
+    <div class="section-grid three-col">
+
+      <div class="card reveal">
+        <div class="card-title">Claude Code JSONL</div>
+        <div class="card-file">~/.claude/projects/&lt;path&gt;/&lt;uuid&gt;.jsonl</div>
+        <div class="card-desc">Every Claude Code session produces a JSONL file with the complete conversation, tool calls, token usage, and system events. Files range from kilobytes to 50MB+.</div>
+        <div class="stats-row">
+          <span class="stat-badge">1,275 files</span>
+          <span class="stat-badge">5.9 GB</span>
+          <span class="stat-badge">52 project dirs</span>
+        </div>
+        <div class="record-types">
+          <span class="record-type">user</span>
+          <span class="record-type">assistant</span>
+          <span class="record-type">system</span>
+          <span class="record-type">progress</span>
+          <span class="record-type">file-history-snapshot</span>
+          <span class="record-type">summary</span>
+        </div>
+      </div>
+
+      <div class="card reveal">
+        <div class="card-title">Browser Tabs</div>
+        <div class="card-file">Chrome DevTools Protocol + Session Files</div>
+        <div class="card-desc">Captures the current state of all open browser tabs via CDP on ports 9222&ndash;9224, with a fallback to parsing session storage files directly.</div>
+        <div class="stats-row">
+          <span class="stat-badge">CDP 9222&ndash;9224</span>
+          <span class="stat-badge">20 categories</span>
+        </div>
+        <ul class="card-detail" style="margin-top: 0.75rem;">
+          <li>URL regex categorization</li>
+          <li>Stale tab detection (expired OAuth, dead localhost)</li>
+          <li>History DB cross-reference for visit counts</li>
+          <li>Session file fallback when CDP unavailable</li>
+        </ul>
+      </div>
+
+      <div class="card reveal">
+        <div class="card-title">Claude.ai Web Conversations</div>
+        <div class="card-file">~/.claude_history_search/conversations.db</div>
+        <div class="card-desc">Exported conversations from the Claude.ai web interface, indexed separately with full-text search for cross-referencing past discussions.</div>
+        <div class="stats-row">
+          <span class="stat-badge">532+ conversations</span>
+          <span class="stat-badge">6,783 messages</span>
+        </div>
+        <ul class="card-detail" style="margin-top: 0.75rem;">
+          <li>FTS5 full-text search index</li>
+          <li>Porter stemming + Unicode tokenization</li>
+          <li>Searchable by sender, date range, context</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLOW -->
+  <div class="flow-connector">
+    <div class="flow-multi">
+      <div class="flow-arrow"><div class="flow-line"></div><div class="flow-head"></div></div>
+      <div class="flow-arrow"><div class="flow-line"></div><div class="flow-head"></div></div>
+      <div class="flow-arrow"><div class="flow-line"></div><div class="flow-head"></div></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       SECTION 2: INGESTION
+       ═══════════════════════════════════════════════════ -->
+  <section class="section">
+    <div class="section-label" data-num="02">Ingestion Layer</div>
+    <div class="section-grid three-col">
+
+      <div class="card reveal">
+        <div class="card-title">cc_indexer.py</div>
+        <div class="card-file">Session Parser &amp; Cost Estimator</div>
+        <div class="card-desc">Streams each JSONL file line-by-line to handle massive files without loading into memory. Extracts 23 structured fields per session.</div>
+        <div class="field-tags">
+          <span class="field-tag">session_id</span>
+          <span class="field-tag">model</span>
+          <span class="field-tag">input_tokens</span>
+          <span class="field-tag">output_tokens</span>
+          <span class="field-tag">cache_tokens</span>
+          <span class="field-tag">cost_usd</span>
+          <span class="field-tag">tools_used</span>
+          <span class="field-tag">tool_call_count</span>
+          <span class="field-tag">slug</span>
+          <span class="field-tag">git_branch</span>
+          <span class="field-tag">is_sidechain</span>
+          <span class="field-tag">total_duration_ms</span>
+          <span class="field-tag">turn_count</span>
+          <span class="field-tag">first_prompt</span>
+          <span class="field-tag">summary</span>
+        </div>
+        <div class="pricing-grid" style="margin-top: 0.75rem;">
+          <span></span><span class="price-header">in/1M</span><span class="price-header">out/1M</span>
+          <span class="model-name">Opus 4.6</span><span class="price">$15</span><span class="price">$75</span>
+          <span class="model-name">Sonnet 4.6</span><span class="price">$3</span><span class="price">$15</span>
+          <span class="model-name">Haiku 4.5</span><span class="price">$0.80</span><span class="price">$4</span>
+        </div>
+        <div class="stats-row" style="margin-top: 0.75rem;">
+          <span class="stat-badge">incremental</span>
+          <span class="stat-badge">batch 50</span>
+        </div>
+      </div>
+
+      <div class="card reveal">
+        <div class="card-title">snapshot.py</div>
+        <div class="card-file">Tab Capture Engine</div>
+        <div class="card-desc">Captures browser state through a multi-step pipeline with intelligent fallbacks and enrichment from the browser's History database.</div>
+        <ul class="card-detail">
+          <li>Try CDP on ports 9222, 9223, 9224</li>
+          <li>Fallback: parse session storage files</li>
+          <li>Cross-reference with History DB</li>
+          <li>Apply URL regex categorization (20 cats)</li>
+          <li>Check stale: expired OAuth, dead localhost</li>
+          <li>Save snapshot + individual tab records</li>
+        </ul>
+        <div class="stats-row" style="margin-top: 0.75rem;">
+          <span class="stat-badge">CDP primary</span>
+          <span class="stat-badge">session fallback</span>
+        </div>
+      </div>
+
+      <div class="card reveal">
+        <div class="card-title">Claude.ai Indexer</div>
+        <div class="card-file">~/.claude_history_search/</div>
+        <div class="card-desc">Imports exported Claude.ai conversations into a dedicated SQLite database with full-text search capabilities.</div>
+        <ul class="card-detail">
+          <li>Parse exported conversation JSONs</li>
+          <li>Extract messages with sender + timestamp</li>
+          <li>Build FTS5 virtual table</li>
+          <li>Porter stemming for natural language</li>
+          <li>Unicode61 tokenization</li>
+          <li>Query via search.py CLI</li>
+        </ul>
+        <div class="stats-row" style="margin-top: 0.75rem;">
+          <span class="stat-badge">FTS5</span>
+          <span class="stat-badge">standalone</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLOW -->
+  <div class="flow-connector">
+    <div class="flow-arrow">
+      <div class="flow-line"></div>
+      <div class="flow-head"></div>
+      <div class="flow-label">converge into two databases</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       SECTION 3: STORAGE
+       ═══════════════════════════════════════════════════ -->
+  <section class="section">
+    <div class="section-label" data-num="03">Storage &mdash; Two-Layer Architecture</div>
+    <div class="section-grid two-col">
+
+      <div class="card reveal">
+        <div class="db-header">
+          <span class="db-name">ledger.db</span>
+          <span class="db-size">~6 MB</span>
+          <span class="db-layer">operational</span>
+        </div>
+        <table class="schema-table">
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">snapshots</td><td class="col-note">point-in-time tab captures</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">tabs</td><td class="col-note">individual tab records</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">cc_sessions</td><td class="col-note">23 columns &mdash; core index</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">parked_groups</td><td class="col-note">saved tab groups</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">parked_tabs</td><td class="col-note">tabs within groups</td></tr>
+          <tr><td class="col-tree">&boxur;</td><td class="col-name">daily_digests</td><td class="col-note">daily summaries</td></tr>
+        </table>
+        <div class="db-transfer">
+          <span>ledger.db</span>
+          <span class="arrow-h"></span>
+          <span>knowledge_base.db</span>
+          <span style="opacity: 0.5;">&ensp;via kb_taxonomy.py</span>
+        </div>
+      </div>
+
+      <div class="card reveal">
+        <div class="db-header">
+          <span class="db-name">knowledge_base.db</span>
+          <span class="db-size">~58 MB</span>
+          <span class="db-layer sage">analytical</span>
+        </div>
+        <table class="schema-table">
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">kb_sessions</td><td class="col-count">1,316</td><td class="col-note">enriched sessions</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">kb_messages</td><td class="col-count">49,517</td><td class="col-note">message-level index</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">kb_fts</td><td class="col-count">21,334</td><td class="col-note">FTS5 virtual table</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">kb_connections</td><td class="col-count">1,322</td><td class="col-note">cross-session links</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">kb_embeddings</td><td class="col-count">&mdash;</td><td class="col-note">semantic vectors</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">kb_projects</td><td class="col-count">12</td><td class="col-note">canonical projects</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">kb_sub_projects</td><td class="col-count">61</td><td class="col-note">sub-project taxonomy</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">kb_commands</td><td class="col-count">2,444</td><td class="col-note">CLI command history</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">kb_plans</td><td class="col-count">39</td><td class="col-note">plan documents</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">kb_todos</td><td class="col-count">584</td><td class="col-note">todo lists</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">kb_teams</td><td class="col-count">3</td><td class="col-note">team configs</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">kb_claude_ai</td><td class="col-count">532</td><td class="col-note">web conversations</td></tr>
+          <tr><td class="col-tree">&boxvr;</td><td class="col-name">kb_deep_archives</td><td class="col-count">&mdash;</td><td class="col-note">100MB+ file analysis</td></tr>
+          <tr><td class="col-tree">&boxur;</td><td class="col-name">kb_progress</td><td class="col-count">9</td><td class="col-note">pipeline stage tracking</td></tr>
+        </table>
+        <div class="stats-row" style="margin-top: 0.75rem;">
+          <span class="stat-badge">22 indexes</span>
+          <span class="stat-badge">FTS5 Porter stemming</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLOW -->
+  <div class="flow-connector">
+    <div class="flow-arrow">
+      <div class="flow-line"></div>
+      <div class="flow-head"></div>
+      <div class="flow-label">8-stage enrichment pipeline</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       SECTION 4: KB BUILD PIPELINE
+       ═══════════════════════════════════════════════════ -->
+  <section class="section">
+    <div class="section-label" data-num="04">Knowledge Base Build Pipeline</div>
+    <div class="pipeline-note">kb_build.py &mdash; Master orchestrator. Resumable stages, progress tracking in kb_progress table.</div>
+    <div class="pipeline-track">
+
+      <div class="pipeline-stage reveal">
+        <div class="stage-num">00</div>
+        <div class="stage-name">Schema</div>
+        <div class="stage-detail">Create 14 tables, FTS5 virtual table, 22 indexes</div>
+        <div class="stage-stat">kb_schema.py</div>
+      </div>
+      <div class="pipeline-connector">&rarr;</div>
+
+      <div class="pipeline-stage reveal">
+        <div class="stage-num">01</div>
+        <div class="stage-name">Taxonomy</div>
+        <div class="stage-detail">Map sessions to 12 canonical projects via deterministic path matching</div>
+        <div class="stage-stat">61 sub-projects</div>
+      </div>
+      <div class="pipeline-connector">&rarr;</div>
+
+      <div class="pipeline-stage reveal">
+        <div class="stage-num">02</div>
+        <div class="stage-name">Messages</div>
+        <div class="stage-detail">Re-parse all JSONL files for message-level indexing</div>
+        <div class="stage-stat">49,517 msgs</div>
+      </div>
+      <div class="pipeline-connector">&rarr;</div>
+
+      <div class="pipeline-stage reveal">
+        <div class="stage-num">03</div>
+        <div class="stage-name">FTS Build</div>
+        <div class="stage-detail">Populate FTS5 with Porter stemming + Unicode tokenization</div>
+        <div class="stage-stat">21,334 entries</div>
+      </div>
+      <div class="pipeline-connector">&rarr;</div>
+
+      <div class="pipeline-stage reveal">
+        <div class="stage-num">04</div>
+        <div class="stage-name">Summarize</div>
+        <div class="stage-detail">AI summaries via Claude API. Opus for major, Haiku for minor projects</div>
+        <div class="stage-stat">~$5&ndash;15 API cost</div>
+      </div>
+      <div class="pipeline-connector">&rarr;</div>
+
+      <div class="pipeline-stage reveal">
+        <div class="stage-num">05</div>
+        <div class="stage-name">Link</div>
+        <div class="stage-detail">Detect cross-session connections: temporal, branch, slug, parent-child</div>
+        <div class="stage-stat">1,322 links</div>
+      </div>
+      <div class="pipeline-connector">&rarr;</div>
+
+      <div class="pipeline-stage reveal">
+        <div class="stage-num">06</div>
+        <div class="stage-name">Auxiliary</div>
+        <div class="stage-detail">Index commands, plans, todos, teams, Claude.ai conversations</div>
+        <div class="stage-stat">3,602 records</div>
+      </div>
+      <div class="pipeline-connector">&rarr;</div>
+
+      <div class="pipeline-stage reveal">
+        <div class="stage-num">07</div>
+        <div class="stage-name">Verify</div>
+        <div class="stage-detail">9-point integrity check: counts, FTS, connections, search test</div>
+        <div class="stage-stat">all-or-nothing</div>
+      </div>
+      <div class="pipeline-connector">&rarr;</div>
+
+      <div class="pipeline-stage optional reveal">
+        <div class="stage-num">08</div>
+        <div class="stage-name">Semantic</div>
+        <div class="stage-detail">Generate embeddings via hash, ollama, or openai providers</div>
+        <div class="stage-stat">optional</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FLOW -->
+  <div class="flow-connector">
+    <div class="flow-arrow">
+      <div class="flow-line"></div>
+      <div class="flow-head"></div>
+      <div class="flow-label">4 retrieval interfaces</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       SECTION 5: RETRIEVAL
+       ═══════════════════════════════════════════════════ -->
+  <section class="section">
+    <div class="section-label" data-num="05">Retrieval Interfaces</div>
+    <div class="section-grid four-col">
+
+      <div class="card reveal">
+        <div class="card-title">CLI</div>
+        <div class="card-file">kb_query.py</div>
+        <div class="card-desc">Command-line interface with 13+ query methods. Returns JSON for piping into other tools and agents.</div>
+        <div class="methods-list">
+          <span class="method-tag">projects</span>
+          <span class="method-tag">context</span>
+          <span class="method-tag">search</span>
+          <span class="method-tag">semantic</span>
+          <span class="method-tag">timeline</span>
+          <span class="method-tag">memory</span>
+          <span class="method-tag">stats</span>
+          <span class="method-tag">recent</span>
+          <span class="method-tag">iterations</span>
+          <span class="method-tag">related</span>
+          <span class="method-tag">session</span>
+        </div>
+      </div>
+
+      <div class="card reveal">
+        <div class="card-title">Python API</div>
+        <div class="card-file">KnowledgeBase class</div>
+        <div class="card-desc">Direct import for programmatic access. Context manager pattern ensures clean database connections.</div>
+        <div class="code-block">
+          with KnowledgeBase() as kb:<br>
+          &ensp;&ensp;kb.search("query")<br>
+          &ensp;&ensp;kb.get_continuation_context("proj")<br>
+          &ensp;&ensp;kb.get_memory_packet("proj")
+        </div>
+      </div>
+
+      <div class="card reveal">
+        <div class="card-title">REST API</div>
+        <div class="card-file">FastAPI &mdash; localhost:7777</div>
+        <div class="card-desc">Web dashboard + 15+ JSON endpoints for tabs, sessions, search, memory, and analytics.</div>
+        <div class="methods-list">
+          <span class="method-tag">/api/right-now</span>
+          <span class="method-tag">/api/search</span>
+          <span class="method-tag">/api/cc/stats</span>
+          <span class="method-tag">/api/cc/timeline</span>
+          <span class="method-tag">/api/cc/tools</span>
+          <span class="method-tag">/api/kb/semantic</span>
+          <span class="method-tag">/api/kb/memory</span>
+        </div>
+      </div>
+
+      <div class="card reveal">
+        <div class="card-title">MCP Server</div>
+        <div class="card-file">kb_mcp_server.py &mdash; 8 tools</div>
+        <div class="card-desc">Stdio MCP server exposing the KB directly to Claude Code sessions as callable tools.</div>
+        <div class="methods-list">
+          <span class="method-tag">kb_search</span>
+          <span class="method-tag">kb_semantic</span>
+          <span class="method-tag">kb_context</span>
+          <span class="method-tag">kb_memory</span>
+          <span class="method-tag">kb_session</span>
+          <span class="method-tag">kb_projects</span>
+          <span class="method-tag">kb_timeline</span>
+          <span class="method-tag">kb_stats</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLOW -->
+  <div class="flow-connector">
+    <div class="flow-arrow">
+      <div class="flow-line" style="height: 20px;"></div>
+      <div class="flow-head"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       SECTION 6: AUTOMATION
+       ═══════════════════════════════════════════════════ -->
+  <section class="section" style="border-bottom: none;">
+    <div class="section-label" data-num="06">Automation</div>
+    <div class="auto-strip">
+      <div class="auto-item reveal">
+        <div class="auto-label">launchd (every 30 min)</div>
+        <div class="auto-detail">
+          com.rileycoyote.tab-ledger.plist<br>
+          Runs run_snapshot.py &rarr; snapshot tabs + reindex cc_sessions to ledger.db
+        </div>
+      </div>
+      <div class="auto-item reveal">
+        <div class="auto-label">Nightly Refresh (~4 AM)</div>
+        <div class="auto-detail">
+          run_kb_refresh.py<br>
+          Re-runs KB stages 1&ndash;3, 5&ndash;7<br>
+          Skips stage 4 (summarization) to avoid API costs
+        </div>
+      </div>
+      <div class="auto-item reveal">
+        <div class="auto-label">Manual Build</div>
+        <div class="auto-detail">
+          kb_build.py<br>
+          --from N &ensp;(resume from stage)<br>
+          --only N &ensp;(single stage)<br>
+          --skip-summarize &ensp;(no API calls)<br>
+          --drop &ensp;(rebuild from scratch)
+        </div>
+      </div>
+    </div>
+    <div class="auto-loop">30-minute cycle feeds back to ingestion layer</div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════
+       FOOTER
+       ═══════════════════════════════════════════════════ -->
+  <div class="footer-line"></div>
+  <footer class="footer">
+    <span>~/.tab-ledger/</span>
+    <span>&middot;</span>
+    <span>SQLite &middot; Python &middot; FastAPI &middot; MCP</span>
+    <span>&middot;</span>
+    <span>Local-first. No cloud. All yours.</span>
+  </footer>
+
+</div>
+
+<script>
+// Scroll reveal
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

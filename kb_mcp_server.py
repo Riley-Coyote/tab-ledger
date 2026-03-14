@@ -41,6 +41,38 @@ TOOLS = [
         },
     ),
     Tool(
+        name="kb_semantic",
+        description="Semantic search over memory embeddings. Great for finding conceptually related sessions beyond keyword matches.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Semantic query text"},
+                "project": {"type": "string", "description": "Optional project scope"},
+                "source_type": {"type": "string", "description": "Optional source type filter (summary|prompt|plan|todo|message)"},
+                "limit": {"type": "integer", "description": "Max results (default 20)", "default": 20},
+                "provider": {"type": "string", "description": "Optional embedding provider override: hash|ollama|openai"},
+                "model": {"type": "string", "description": "Optional embedding model override"},
+                "min_score": {"type": "number", "description": "Minimum similarity score", "default": 0.18},
+            },
+            "required": ["query"],
+        },
+    ),
+    Tool(
+        name="kb_memory",
+        description="Build a continuity packet for a project: last context, unresolved blockers, next steps, continuity threads, and semantic anchors.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "project": {"type": "string", "description": "Canonical project name"},
+                "semantic_query": {"type": "string", "description": "Optional query to steer semantic retrieval"},
+                "semantic_limit": {"type": "integer", "description": "Semantic hit limit (default 10)", "default": 10},
+                "provider": {"type": "string", "description": "Optional embedding provider override: hash|ollama|openai"},
+                "model": {"type": "string", "description": "Optional embedding model override"},
+            },
+            "required": ["project"],
+        },
+    ),
+    Tool(
         name="kb_context",
         description="Get continuation context for resuming work on a project. Returns last session summary, next steps, blockers, recent decisions, and related sessions. THE key tool for session handoff.",
         inputSchema={
@@ -111,6 +143,28 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 limit=arguments.get("limit", 20),
             )
             return _json_result(results)
+
+        elif name == "kb_semantic":
+            results = kb.semantic_search(
+                query=arguments["query"],
+                project=arguments.get("project"),
+                source_type=arguments.get("source_type"),
+                limit=arguments.get("limit", 20),
+                provider=arguments.get("provider"),
+                model=arguments.get("model"),
+                min_score=arguments.get("min_score", 0.18),
+            )
+            return _json_result(results)
+
+        elif name == "kb_memory":
+            result = kb.get_memory_packet(
+                project=arguments["project"],
+                semantic_query=arguments.get("semantic_query"),
+                semantic_limit=arguments.get("semantic_limit", 10),
+                provider=arguments.get("provider"),
+                model=arguments.get("model"),
+            )
+            return _json_result(result)
 
         elif name == "kb_context":
             result = kb.get_continuation_context(arguments["project"])

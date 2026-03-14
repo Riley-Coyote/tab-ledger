@@ -53,6 +53,33 @@ def main():
     from kb_auxiliary import index_all_auxiliary
     index_all_auxiliary()
 
+    # Optional Stage 8: Semantic embeddings
+    semantic_provider = os.getenv("KB_SEMANTIC_PROVIDER", "").strip().lower()
+    if semantic_provider:
+        print("\n--- Stage 8: Semantic Indexing ---")
+        from kb_schema import get_kb_db
+        from kb_semantic import create_embedding_provider, build_semantic_index
+
+        embedder = create_embedding_provider(
+            semantic_provider,
+            model=os.getenv("KB_SEMANTIC_MODEL"),
+        )
+        include_messages = os.getenv("KB_SEMANTIC_INCLUDE_MESSAGES", "0").lower() in {"1", "true", "yes"}
+
+        kb = get_kb_db()
+        try:
+            stats = build_semantic_index(
+                kb,
+                provider=embedder,
+                include_messages=include_messages,
+            )
+        finally:
+            kb.close()
+        print(f"  Semantic index refreshed: {stats}")
+    else:
+        print("\n--- Stage 8: Semantic Indexing (skipped) ---")
+        print("  Set KB_SEMANTIC_PROVIDER=hash|ollama|openai to enable.")
+
     elapsed = time.time() - start
     print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] KB refresh complete in {int(elapsed)}s")
 

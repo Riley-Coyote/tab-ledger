@@ -47,9 +47,9 @@ MAJOR_PROJECTS = {
     "clawdbot", "vektor", "anima", "data-research"
 }
 
-SUMMARIZATION_TIERS = {
-    "opus": "opus",
-    "haiku": "haiku",
+SUMMARIZATION_MODELS = {
+    "opus": "claude-opus-4-6",
+    "haiku": "claude-haiku-4-5-20251001",
 }
 
 # File size thresholds (in bytes)
@@ -356,7 +356,7 @@ def summarize_session(kb_conn: sqlite3.Connection, session_row: sqlite3.Row) -> 
     if project_row:
         tier = project_row["summarization_tier"] or "haiku"
 
-    model_name = SUMMARIZATION_TIERS.get(tier, "claude-haiku-4-5-20251001")
+    model_name = SUMMARIZATION_MODELS.get(tier, SUMMARIZATION_MODELS["haiku"])
 
     # Build metadata dict
     metadata = {
@@ -429,6 +429,17 @@ def summarize_session(kb_conn: sqlite3.Connection, session_row: sqlite3.Row) -> 
     summary_text_para = _build_summary_paragraph(summary_json)
 
     try:
+        # Keep summarization idempotent when re-running.
+        kb_conn.execute(
+            """DELETE FROM kb_fts
+               WHERE session_uuid = ? AND source_type IN ('summary', 'deep_archive')""",
+            (session_uuid,),
+        )
+        kb_conn.execute(
+            "DELETE FROM kb_deep_archives WHERE session_id = ?",
+            (session_id,),
+        )
+
         kb_conn.execute(
             """UPDATE kb_sessions
                SET summary_json = ?, summary_text = ?,
@@ -493,7 +504,7 @@ def _summarize_deep_archive(
     ).fetchone()
 
     tier = "opus"  # Always use opus for deep archives
-    model_name = SUMMARIZATION_TIERS["opus"]
+    model_name = SUMMARIZATION_MODELS["opus"]
 
     metadata = {
         "session_uuid": session_uuid,
@@ -575,6 +586,17 @@ Return ONLY valid JSON."""
     analysis_text = summary_json.get("key_findings", "")
 
     try:
+        # Keep deep-archive analysis idempotent when re-running.
+        kb_conn.execute(
+            """DELETE FROM kb_fts
+               WHERE session_uuid = ? AND source_type IN ('summary', 'deep_archive')""",
+            (session_uuid,),
+        )
+        kb_conn.execute(
+            "DELETE FROM kb_deep_archives WHERE session_id = ?",
+            (session_id,),
+        )
+
         # Store main summary
         kb_conn.execute(
             """UPDATE kb_sessions
@@ -662,6 +684,15 @@ def _find_jsonl_for_session(
         logger.warning(f"Claude projects directory not found: {claude_projects}")
         return None
 
+    # Prefer stored path if available.
+    stored_path = session_row["jsonl_path"] if "jsonl_path" in session_row.keys() else None
+    if stored_path:
+        candidate = Path(stored_path)
+        if not candidate.is_absolute():
+            candidate = claude_projects / candidate
+        if candidate.exists():
+            return candidate
+
     # Search for matching JSONL file (top-level and subagents/)
     for project_dir in claude_projects.iterdir():
         if not project_dir.is_dir():
@@ -672,10 +703,20 @@ def _find_jsonl_for_session(
         if jsonl_file.exists():
             return jsonl_file
 
-        # Check subagents directory
-        subagent_file = project_dir / "subagents" / f"{session_uuid}.jsonl"
-        if subagent_file.exists():
-            return subagent_file
+        # Modern subagent layout: <project>/<parent>/subagents/<child>.jsonl
+        nested = list(project_dir.glob(f"*/subagents/{session_uuid}.jsonl"))
+        if nested:
+            return nested[0]
+
+        # Legacy subagent layout: <project>/subagents/<child>.jsonl
+        legacy = project_dir / "subagents" / f"{session_uuid}.jsonl"
+        if legacy.exists():
+            return legacy
+
+    # Final fallback if layout changes again.
+    matches = list(claude_projects.rglob(f"{session_uuid}.jsonl"))
+    if matches:
+        return matches[0]
 
     logger.debug(
         f"JSONL file not found for session {session_uuid} across all project dirs"
@@ -713,15 +754,16 @@ def run_summarization(batch_size: int = BATCH_SIZE, resume: bool = True) -> Dict
         # Update progress
         kb_conn.execute(
             """INSERT OR REPLACE INTO kb_progress
-               (stage, status, started_at) VALUES ('summarization', 'in_progress', CURRENT_TIMESTAMP)"""
+               (stage, status, started_at) VALUES ('summarization', 'running', CURRENT_TIMESTAMP)"""
         )
         kb_conn.commit()
 
         # Get sessions needing summarization
-        query = "SELECT * FROM kb_sessions WHERE summary_version = 0"
         if resume:
+            query = "SELECT * FROM kb_sessions WHERE summary_version = 0 ORDER BY started_at"
             sessions = kb_conn.execute(query).fetchall()
         else:
+            query = "SELECT * FROM kb_sessions ORDER BY started_at"
             sessions = kb_conn.execute(query).fetchall()
 
         total = len(sessions)
@@ -730,6 +772,12 @@ def run_summarization(batch_size: int = BATCH_SIZE, resume: bool = True) -> Dict
         if total == 0:
             logger.info("All sessions already summarized!")
             stats["skipped"] = 0
+            kb_conn.execute(
+                """INSERT OR REPLACE INTO kb_progress
+                   (stage, status, processed, errors, completed_at, notes)
+                   VALUES ('summarization', 'completed', 0, 0, CURRENT_TIMESTAMP, 'nothing to summarize')"""
+            )
+            kb_conn.commit()
             return stats
 
         # Process in batches
@@ -831,9 +879,12 @@ def main():
     if args.dry_run:
         logger.info("DRY RUN MODE — no changes will be made")
         kb_conn = get_kb_db(readonly=True)
-        count = kb_conn.execute(
-            "SELECT COUNT(*) FROM kb_sessions WHERE summary_version = 0"
-        ).fetchone()[0]
+        if args.resume:
+            count = kb_conn.execute(
+                "SELECT COUNT(*) FROM kb_sessions WHERE summary_version = 0"
+            ).fetchone()[0]
+        else:
+            count = kb_conn.execute("SELECT COUNT(*) FROM kb_sessions").fetchone()[0]
         logger.info(f"Would process {count} sessions (batch size: {args.batch_size})")
         kb_conn.close()
         return
