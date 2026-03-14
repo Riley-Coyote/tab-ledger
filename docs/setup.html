@@ -3,63 +3,52 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tab Ledger — Setup Guide</title>
+<title>Tab Ledger</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg-void: #000000;
-  --bg-deep: #050505;
-  --bg-surface: #0a0a0a;
-  --bg-elevated: #111111;
-  --bg-raised: #161616;
-  --border-subtle: #1a1a1a;
-  --border-medium: #252525;
-  --text-primary: #ffffff;
-  --text-secondary: #b0b0b0;
-  --text-tertiary: #787878;
-  --text-dim: #505050;
-  --text-ghost: #303030;
-  --accent-sage: #c8e6d9;
-  --accent-sage-dim: rgba(200, 230, 217, 0.12);
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
-  --font-serif: 'Cormorant Garamond', Georgia, serif;
-  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --bg: #000000;
+  --bg-elevated: #0a0a0a;
+  --bg-code: #0e0e0e;
+  --border: #1a1a1a;
+  --border-mid: #222222;
+  --text: #ffffff;
+  --text-2: #a0a0a0;
+  --text-3: #707070;
+  --text-4: #484848;
+  --text-5: #2a2a2a;
+  --sage: #c8e6d9;
+  --sage-dim: rgba(200,230,217,0.10);
+  --sans: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'SF Mono', monospace;
+  --serif: 'Cormorant Garamond', Georgia, serif;
+  --expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: var(--font-sans);
+  font-family: var(--sans);
   font-weight: 300;
-  background: var(--bg-void);
-  color: var(--text-secondary);
+  background: var(--bg);
+  color: var(--text-2);
   line-height: 1.7;
   -webkit-font-smoothing: antialiased;
 }
 
-::selection { background: rgba(200,230,217,0.2); color: var(--text-primary); }
-::-webkit-scrollbar { width: 4px; }
+::selection { background: rgba(200,230,217,0.2); color: var(--text); }
+::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-medium); }
+::-webkit-scrollbar-thumb { background: var(--border-mid); }
 
-.page {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 0 2rem 6rem;
-}
+.page { max-width: 640px; margin: 0 auto; padding: 0 2rem 5rem; }
 
 /* ── Hero ── */
 .hero {
-  min-height: 70vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  padding: 8rem 0 3rem;
   text-align: center;
-  padding: 4rem 0;
   position: relative;
 }
 
@@ -67,351 +56,266 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse 70% 50% at 50% 40%, rgba(200,230,217,0.025) 0%, transparent 70%);
+  background: radial-gradient(ellipse 60% 40% at 50% 30%, rgba(200,230,217,0.02) 0%, transparent 70%);
   pointer-events: none;
 }
 
-.hero-label {
-  font-family: var(--font-mono);
-  font-size: 0.6rem;
-  font-weight: 500;
-  letter-spacing: 0.35em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  margin-bottom: 2rem;
-  opacity: 0;
-  animation: fadeIn 0.8s ease 0.2s forwards;
-}
-
-.hero-title {
-  font-family: var(--font-serif);
-  font-size: clamp(2.8rem, 7vw, 4.5rem);
+h1 {
+  font-family: var(--serif);
+  font-size: clamp(2.8rem, 7vw, 4rem);
   font-weight: 300;
   font-style: italic;
-  color: var(--text-primary);
+  color: var(--text);
   letter-spacing: -0.02em;
   line-height: 1.1;
   opacity: 0;
-  animation: fadeInUp 1s var(--ease-out-expo) 0.4s forwards;
+  animation: up 0.8s var(--expo) 0.2s forwards;
 }
 
-.hero-tagline {
-  font-family: var(--font-serif);
-  font-size: 1.15rem;
+.tagline {
+  font-family: var(--serif);
+  font-size: 1rem;
   font-weight: 300;
   font-style: italic;
-  color: var(--accent-sage);
-  margin-top: 1rem;
+  color: var(--sage);
+  margin-top: 0.6rem;
   opacity: 0;
-  animation: fadeIn 0.8s ease 0.9s forwards;
+  animation: fade 0.6s ease 0.6s forwards;
 }
 
-.hero-desc {
-  font-size: 0.9rem;
-  color: var(--text-tertiary);
-  max-width: 440px;
-  margin-top: 1.5rem;
-  line-height: 1.8;
-  opacity: 0;
-  animation: fadeIn 0.8s ease 1.2s forwards;
-}
-
-.hero-line {
-  width: 1px;
-  height: 60px;
-  background: linear-gradient(to bottom, var(--text-ghost), transparent);
-  margin-top: 3rem;
-  opacity: 0;
-  animation: fadeIn 1s ease 1.6s forwards;
-}
-
-/* ── Sections ── */
-.section {
-  padding: 3.5rem 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.section:last-of-type { border-bottom: none; }
-
-.section-num {
-  font-family: var(--font-mono);
-  font-size: 0.55rem;
-  font-weight: 500;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: var(--text-ghost);
-  margin-bottom: 0.75rem;
-}
-
-.section-title {
-  font-size: clamp(1.25rem, 2.5vw, 1.5rem);
-  font-weight: 200;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
-  margin-bottom: 1rem;
-}
-
-.section p {
-  font-size: 0.88rem;
-  color: var(--text-tertiary);
-  line-height: 1.8;
-  margin-bottom: 1rem;
-}
-
-.section p:last-child { margin-bottom: 0; }
-
-/* ── Feature list ── */
-.features {
+.hero-features {
   list-style: none;
-  margin: 1rem 0;
+  margin: 2rem auto 0;
+  max-width: 420px;
+  text-align: left;
+  opacity: 0;
+  animation: fade 0.6s ease 0.9s forwards;
 }
 
-.features li {
-  font-size: 0.85rem;
-  color: var(--text-tertiary);
-  padding: 0.4rem 0;
-  padding-left: 1.25rem;
+.hero-features li {
+  font-size: 0.82rem;
+  color: var(--text-3);
+  padding: 0.25rem 0 0.25rem 1rem;
   position: relative;
-  line-height: 1.6;
+  line-height: 1.55;
 }
 
-.features li::before {
+.hero-features li::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 0.75rem;
-  width: 5px;
+  top: 0.62rem;
+  width: 4px;
   height: 1px;
-  background: var(--accent-sage);
-  opacity: 0.5;
+  background: var(--sage);
+  opacity: 0.4;
 }
 
-/* ── Code blocks ── */
-.code-block {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  padding: 1.25rem 1.5rem;
-  margin: 1rem 0;
-  overflow-x: auto;
-  position: relative;
-}
-
-.code-block code {
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  font-weight: 400;
-  color: var(--text-secondary);
-  line-height: 1.8;
-  display: block;
-  white-space: pre;
-}
-
-.code-block .comment { color: var(--text-dim); }
-.code-block .cmd { color: var(--text-primary); }
-.code-block .str { color: var(--accent-sage); }
-.code-block .key { color: var(--text-tertiary); }
-
-.code-label {
-  font-family: var(--font-mono);
-  font-size: 0.55rem;
-  font-weight: 500;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  margin-bottom: 0.5rem;
-}
-
-/* ── Install hero ── */
-.install-block {
-  background: var(--bg-elevated);
-  border: 1px solid rgba(200,230,217,0.12);
-  padding: 2rem;
+.install {
+  margin: 2rem auto 0;
+  padding: 1.1rem 2rem;
+  background: var(--bg-code);
+  border: 1px solid var(--sage-dim);
   text-align: center;
-  margin: 1.5rem 0;
+  max-width: 320px;
+  opacity: 0;
+  animation: fade 0.6s ease 1.2s forwards;
 }
 
-.install-block code {
-  font-family: var(--font-mono);
-  font-size: 1.1rem;
+.install code {
+  font-family: var(--mono);
+  font-size: 0.95rem;
   font-weight: 400;
-  color: var(--accent-sage);
-  letter-spacing: 0.02em;
+  color: var(--sage);
+  letter-spacing: 0.01em;
 }
 
 .install-note {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--text-4);
+  margin-top: 0.4rem;
+  letter-spacing: 0.05em;
+}
+
+/* ── Sections ── */
+.s {
+  padding: 2.5rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.s-title {
+  font-size: 1.15rem;
+  font-weight: 200;
+  color: var(--text);
+  letter-spacing: -0.015em;
+  margin-bottom: 0.75rem;
+}
+
+.s p {
+  font-size: 0.84rem;
+  color: var(--text-3);
+  line-height: 1.75;
+  margin-bottom: 0.75rem;
+}
+
+.s p:last-child { margin-bottom: 0; }
+
+/* ── Code ── */
+pre {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  padding: 1rem 1.25rem;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  font-family: var(--mono);
   font-size: 0.75rem;
-  color: var(--text-dim);
-  margin-top: 0.75rem;
+  font-weight: 400;
+  color: var(--text-2);
+  line-height: 1.75;
+  white-space: pre;
+}
+
+pre .c { color: var(--text-4); }
+pre .s { color: var(--sage); }
+pre .k { color: var(--text-3); }
+
+.pre-label {
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  margin-bottom: 0.35rem;
+  margin-top: 0.5rem;
 }
 
 /* ── Steps ── */
-.steps {
-  counter-reset: step;
-  margin: 1.5rem 0;
-}
+.steps { margin: 0.75rem 0; }
 
 .step {
-  counter-increment: step;
-  padding: 1rem 0 1rem 2.5rem;
-  border-bottom: 1px solid var(--border-subtle);
-  position: relative;
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  gap: 0 0.5rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+  align-items: baseline;
 }
 
 .step:last-child { border-bottom: none; }
 
-.step::before {
-  content: counter(step);
-  position: absolute;
-  left: 0;
-  top: 1rem;
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
+.step-n {
+  font-family: var(--mono);
+  font-size: 0.6rem;
   font-weight: 500;
-  color: var(--accent-sage);
-  width: 1.5rem;
-  text-align: center;
+  color: var(--sage);
+  opacity: 0.6;
 }
 
+.step-body {}
+
 .step-cmd {
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  font-weight: 400;
-  color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--text);
 }
 
 .step-desc {
-  font-size: 0.8rem;
-  color: var(--text-dim);
+  font-size: 0.75rem;
+  color: var(--text-4);
+  margin-top: 0.15rem;
 }
 
 /* ── CLI table ── */
-.cli-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1rem 0;
-}
-
-.cli-table tr {
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.cli-table tr:last-child { border-bottom: none; }
-
-.cli-table td {
-  padding: 0.5rem 0;
-  vertical-align: top;
-  font-size: 0.8rem;
-}
-
-.cli-table .col-cmd {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 400;
-  color: var(--text-primary);
-  white-space: nowrap;
-  padding-right: 1.5rem;
-  width: 40%;
-}
-
-.cli-table .col-desc {
-  color: var(--text-dim);
-  font-weight: 300;
-}
+.cli { width: 100%; border-collapse: collapse; margin: 0.75rem 0; }
+.cli tr { border-bottom: 1px solid var(--border); }
+.cli tr:last-child { border-bottom: none; }
+.cli td { padding: 0.4rem 0; font-size: 0.78rem; vertical-align: baseline; }
+.cli .cmd { font-family: var(--mono); font-size: 0.72rem; color: var(--text); white-space: nowrap; padding-right: 1.25rem; }
+.cli .desc { color: var(--text-4); font-weight: 300; }
 
 /* ── MCP tools ── */
-.mcp-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin: 0.75rem 0;
-}
-
-.mcp-tool {
-  font-family: var(--font-mono);
-  font-size: 0.6rem;
+.tools { display: flex; flex-wrap: wrap; gap: 3px; margin: 0.5rem 0; }
+.tool {
+  font-family: var(--mono);
+  font-size: 0.58rem;
   font-weight: 400;
-  padding: 3px 8px;
-  color: var(--accent-sage);
-  border: 1px solid rgba(200,230,217,0.15);
+  padding: 2px 7px;
+  color: var(--sage);
+  border: 1px solid rgba(200,230,217,0.12);
   letter-spacing: 0.02em;
 }
 
-/* ── Architecture ── */
-.arch-grid {
+/* ── Architecture grid ── */
+.arch {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1px;
-  background: var(--border-subtle);
-  margin: 1rem 0;
+  background: var(--border);
+  margin: 0.75rem 0;
 }
 
-.arch-item {
-  background: var(--bg-deep);
-  padding: 1rem 1.25rem;
+.arch-cell {
+  background: var(--bg-code);
+  padding: 0.75rem 1rem;
 }
 
-.arch-label {
-  font-family: var(--font-mono);
-  font-size: 0.55rem;
+.arch-k {
+  font-family: var(--mono);
+  font-size: 0.5rem;
   font-weight: 500;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--text-dim);
-  margin-bottom: 0.4rem;
+  color: var(--text-4);
+  margin-bottom: 0.2rem;
 }
 
-.arch-value {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+.arch-v {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--text-2);
   word-break: break-all;
 }
 
 /* ── Footer ── */
-.footer-line {
-  width: 1px;
-  height: 40px;
-  background: linear-gradient(to bottom, var(--text-ghost), transparent);
-  margin: 3rem auto 1.5rem;
-}
-
-.footer {
+.foot {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border);
   text-align: center;
-  font-size: 0.7rem;
-  color: var(--text-ghost);
-  padding-bottom: 2rem;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--text-5);
+  letter-spacing: 0.05em;
 }
 
-.footer a {
-  color: var(--text-dim);
+.foot a {
+  color: var(--text-4);
   text-decoration: none;
-  border-bottom: 1px solid var(--border-subtle);
-  transition: color 0.2s, border-color 0.2s;
+  border-bottom: 1px solid var(--border);
+  transition: color 0.2s;
 }
 
-.footer a:hover {
-  color: var(--accent-sage);
-  border-color: rgba(200,230,217,0.3);
-}
+.foot a:hover { color: var(--sage); }
 
-/* ── Animations ── */
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes fadeInUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+.foot-sub { margin-top: 0.6rem; }
 
-.reveal {
+/* ── Animation ── */
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+.r {
   opacity: 0;
-  transform: translateY(10px);
-  transition: opacity 0.6s ease, transform 0.6s var(--ease-out-expo);
+  transform: translateY(8px);
+  transition: opacity 0.5s ease, transform 0.5s var(--expo);
 }
-.reveal.visible { opacity: 1; transform: translateY(0); }
+.r.v { opacity: 1; transform: translateY(0); }
 
-/* ── Responsive ── */
 @media (max-width: 600px) {
-  .page { padding: 0 1.25rem 4rem; }
-  .hero { min-height: 60vh; }
-  .arch-grid { grid-template-columns: 1fr; }
-  .install-block code { font-size: 0.9rem; }
+  .page { padding: 0 1.25rem 3rem; }
+  .hero { padding: 5rem 0 2.5rem; }
+  .arch { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -425,177 +329,129 @@ body {
 <body>
 <div class="page">
 
-  <!-- ── Hero ── -->
   <div class="hero">
-    <div class="hero-label">Setup Guide</div>
-    <h1 class="hero-title">Tab Ledger</h1>
-    <p class="hero-tagline">Nothing lost. Everything findable.</p>
-    <p class="hero-desc">Local-first analytics and knowledge base for Claude Code sessions. Indexes everything, makes it searchable, and gives your AI tools persistent memory.</p>
-    <div class="hero-line"></div>
+    <h1>Tab Ledger</h1>
+    <p class="tagline">Nothing lost. Everything findable.</p>
+
+    <ul class="hero-features">
+      <li>Full-text search across every Claude Code conversation</li>
+      <li>Token usage, cost tracking, and tool analytics</li>
+      <li>AI summaries with next steps, blockers, and decisions</li>
+      <li>Cross-session connection detection</li>
+      <li>Works with Claude Code, Codex, OpenClaw, or any agent</li>
+    </ul>
+
+    <div class="install">
+      <code>pip install tab-ledger</code>
+      <div class="install-note">Python 3.10+</div>
+    </div>
   </div>
 
-  <!-- ── What It Does ── -->
-  <section class="section reveal">
-    <div class="section-num">01</div>
-    <h2 class="section-title">What it does</h2>
-    <p>Tab Ledger continuously indexes your Claude Code sessions and makes them queryable &mdash; by you, by your AI tools, and by autonomous agents.</p>
-    <ul class="features">
-      <li>Full-text search across every conversation you've ever had</li>
-      <li>Token usage, cost tracking, and tool analytics per session</li>
-      <li>AI-generated summaries with next steps, blockers, and decisions</li>
-      <li>Cross-session connection detection (temporal, branch, slug-based)</li>
-      <li>Project taxonomy mapping across all your repos</li>
-      <li>Works with Claude Code, Codex, OpenClaw, or any agent with shell access</li>
-    </ul>
-  </section>
-
-  <!-- ── Install ── -->
-  <section class="section reveal">
-    <div class="section-num">02</div>
-    <h2 class="section-title">Install</h2>
-    <div class="install-block">
-      <code>pip install tab-ledger</code>
-      <div class="install-note">Requires Python 3.10+</div>
-    </div>
-  </section>
-
-  <!-- ── First Run ── -->
-  <section class="section reveal">
-    <div class="section-num">03</div>
-    <h2 class="section-title">First run</h2>
+  <section class="s r">
+    <h2 class="s-title">Getting started</h2>
     <p>Three commands to go from zero to searchable.</p>
     <div class="steps">
       <div class="step">
-        <div class="step-cmd">tab-ledger index</div>
-        <div class="step-desc">Scans ~/.claude/projects/ and indexes all session JSONL files into ledger.db. Extracts tokens, costs, tools, models, durations.</div>
+        <span class="step-n">1</span>
+        <div class="step-body">
+          <div class="step-cmd">tab-ledger index</div>
+          <div class="step-desc">Scans ~/.claude/projects/ and indexes all session files</div>
+        </div>
       </div>
       <div class="step">
-        <div class="step-cmd">tab-ledger build</div>
-        <div class="step-desc">Builds the knowledge base &mdash; maps sessions to projects, indexes messages, creates FTS5 search, detects cross-session connections.</div>
+        <span class="step-n">2</span>
+        <div class="step-body">
+          <div class="step-cmd">tab-ledger build</div>
+          <div class="step-desc">Builds the knowledge base &mdash; FTS5 search, project mapping, cross-session links</div>
+        </div>
       </div>
       <div class="step">
-        <div class="step-cmd">tab-ledger search "your query here"</div>
-        <div class="step-desc">Search across everything. You're done.</div>
+        <span class="step-n">3</span>
+        <div class="step-body">
+          <div class="step-cmd">tab-ledger search "your query"</div>
+          <div class="step-desc">Search across everything. Done.</div>
+        </div>
       </div>
     </div>
-    <p style="font-size: 0.78rem; color: var(--text-dim); margin-top: 0.5rem;">Data is stored at <span style="font-family: var(--font-mono); font-size: 0.72rem;">~/.tab-ledger/</span> &mdash; two SQLite databases, entirely on your machine.</p>
   </section>
 
-  <!-- ── MCP Integration ── -->
-  <section class="section reveal">
-    <div class="section-num">04</div>
-    <h2 class="section-title">Claude Code integration</h2>
+  <section class="s r">
+    <h2 class="s-title">Claude Code integration</h2>
     <p>Add Tab Ledger as an MCP server to give Claude Code native access to your session history.</p>
-    <div class="code-label">~/.claude/settings.json</div>
-    <div class="code-block"><code>{
-  <span class="key">"mcpServers"</span>: {
-    <span class="key">"tab-ledger"</span>: {
-      <span class="key">"command"</span>: <span class="str">"tab-ledger"</span>,
-      <span class="key">"args"</span>: [<span class="str">"mcp"</span>]
+    <div class="pre-label">~/.claude/settings.json</div>
+<pre>{
+  <span class="k">"mcpServers"</span>: {
+    <span class="k">"tab-ledger"</span>: {
+      <span class="k">"command"</span>: <span class="s">"tab-ledger"</span>,
+      <span class="k">"args"</span>: [<span class="s">"mcp"</span>]
     }
   }
-}</code></div>
-    <p>This exposes 8 tools directly to Claude Code:</p>
-    <div class="mcp-tools">
-      <span class="mcp-tool">kb_search</span>
-      <span class="mcp-tool">kb_semantic</span>
-      <span class="mcp-tool">kb_context</span>
-      <span class="mcp-tool">kb_memory</span>
-      <span class="mcp-tool">kb_session</span>
-      <span class="mcp-tool">kb_projects</span>
-      <span class="mcp-tool">kb_timeline</span>
-      <span class="mcp-tool">kb_stats</span>
+}</pre>
+    <p>This exposes 8 tools:</p>
+    <div class="tools">
+      <span class="tool">kb_search</span>
+      <span class="tool">kb_semantic</span>
+      <span class="tool">kb_context</span>
+      <span class="tool">kb_memory</span>
+      <span class="tool">kb_session</span>
+      <span class="tool">kb_projects</span>
+      <span class="tool">kb_timeline</span>
+      <span class="tool">kb_stats</span>
     </div>
   </section>
 
-  <!-- ── CLI Reference ── -->
-  <section class="section reveal">
-    <div class="section-num">05</div>
-    <h2 class="section-title">CLI reference</h2>
-    <p>Every command outputs JSON, making it pipeable into other tools and agents.</p>
-    <table class="cli-table">
-      <tr><td class="col-cmd">tab-ledger index</td><td class="col-desc">Index Claude Code sessions from ~/.claude/projects/</td></tr>
-      <tr><td class="col-cmd">tab-ledger build</td><td class="col-desc">Build the full knowledge base (8 stages)</td></tr>
-      <tr><td class="col-cmd">tab-ledger search "query"</td><td class="col-desc">Full-text search (FTS5 syntax supported)</td></tr>
-      <tr><td class="col-cmd">tab-ledger semantic "query"</td><td class="col-desc">Semantic search via embeddings</td></tr>
-      <tr><td class="col-cmd">tab-ledger stats</td><td class="col-desc">Token, cost, and tool usage analytics</td></tr>
-      <tr><td class="col-cmd">tab-ledger timeline &lt;project&gt;</td><td class="col-desc">Chronological session history for a project</td></tr>
-      <tr><td class="col-cmd">tab-ledger context &lt;project&gt;</td><td class="col-desc">Continuation context (last session, next steps, blockers)</td></tr>
-      <tr><td class="col-cmd">tab-ledger memory &lt;project&gt;</td><td class="col-desc">Full continuity packet with semantic anchors</td></tr>
-      <tr><td class="col-cmd">tab-ledger projects</td><td class="col-desc">List all indexed projects with stats</td></tr>
-      <tr><td class="col-cmd">tab-ledger session &lt;uuid&gt;</td><td class="col-desc">Detailed view of a single session</td></tr>
-      <tr><td class="col-cmd">tab-ledger serve</td><td class="col-desc">Start the web dashboard on localhost:7777</td></tr>
-      <tr><td class="col-cmd">tab-ledger mcp</td><td class="col-desc">Run stdio MCP server for Claude Code</td></tr>
-      <tr><td class="col-cmd">tab-ledger refresh</td><td class="col-desc">Nightly KB refresh (skip AI summarization)</td></tr>
+  <section class="s r">
+    <h2 class="s-title">Commands</h2>
+    <table class="cli">
+      <tr><td class="cmd">tab-ledger index</td><td class="desc">Index sessions from ~/.claude/projects/</td></tr>
+      <tr><td class="cmd">tab-ledger build</td><td class="desc">Build the knowledge base (8 stages)</td></tr>
+      <tr><td class="cmd">tab-ledger search "query"</td><td class="desc">Full-text search (FTS5 syntax)</td></tr>
+      <tr><td class="cmd">tab-ledger semantic "query"</td><td class="desc">Semantic search via embeddings</td></tr>
+      <tr><td class="cmd">tab-ledger stats</td><td class="desc">Token, cost, and tool analytics</td></tr>
+      <tr><td class="cmd">tab-ledger timeline &lt;project&gt;</td><td class="desc">Session history for a project</td></tr>
+      <tr><td class="cmd">tab-ledger context &lt;project&gt;</td><td class="desc">Continuation context (next steps, blockers)</td></tr>
+      <tr><td class="cmd">tab-ledger memory &lt;project&gt;</td><td class="desc">Full continuity packet</td></tr>
+      <tr><td class="cmd">tab-ledger projects</td><td class="desc">List all indexed projects</td></tr>
+      <tr><td class="cmd">tab-ledger session &lt;uuid&gt;</td><td class="desc">Detailed session view</td></tr>
+      <tr><td class="cmd">tab-ledger serve</td><td class="desc">Web dashboard on localhost:7777</td></tr>
+      <tr><td class="cmd">tab-ledger mcp</td><td class="desc">Stdio MCP server</td></tr>
     </table>
-    <p style="font-size: 0.78rem; color: var(--text-dim);">Add <span style="font-family: var(--font-mono); font-size: 0.72rem;">--project &lt;name&gt;</span> to filter most query commands by project. Add <span style="font-family: var(--font-mono); font-size: 0.72rem;">--limit N</span> to cap results.</p>
+    <p style="font-size: 0.72rem; color: var(--text-4);">All commands output JSON. Add <span style="font-family: var(--mono);">--project</span> or <span style="font-family: var(--mono);">--limit N</span> to filter.</p>
   </section>
 
-  <!-- ── Python API ── -->
-  <section class="section reveal">
-    <div class="section-num">06</div>
-    <h2 class="section-title">Python API</h2>
-    <p>For programmatic access from scripts, agents, or notebooks.</p>
-    <div class="code-block"><code><span class="key">from</span> <span class="cmd">tab_ledger</span> <span class="key">import</span> KnowledgeBase
+  <section class="s r">
+    <h2 class="s-title">Python API</h2>
+<pre><span class="k">from</span> tab_ledger <span class="k">import</span> KnowledgeBase
 
 kb = KnowledgeBase()
-
-<span class="comment"># Full-text search</span>
-results = kb.search(<span class="str">"websocket auth"</span>, project=<span class="str">"vessel"</span>)
-
-<span class="comment"># Continuation context for session handoff</span>
-context = kb.get_continuation_context(<span class="str">"polyphonic"</span>)
-
-<span class="comment"># Full continuity packet</span>
-memory = kb.get_memory_packet(<span class="str">"sanctuary"</span>)
-
-<span class="comment"># Statistics</span>
-stats = kb.get_stats()
-
-kb.close()</code></div>
+results = kb.search(<span class="s">"websocket auth"</span>, project=<span class="s">"vessel"</span>)
+context = kb.get_continuation_context(<span class="s">"polyphonic"</span>)
+stats   = kb.get_stats()
+kb.close()</pre>
   </section>
 
-  <!-- ── How It Works ── -->
-  <section class="section reveal">
-    <div class="section-num">07</div>
-    <h2 class="section-title">How it works</h2>
-    <p>Tab Ledger reads the JSONL session files that Claude Code already writes to disk. It parses them, extracts structured data, and builds a searchable knowledge base. Nothing leaves your machine.</p>
-    <div class="arch-grid">
-      <div class="arch-item">
-        <div class="arch-label">Source</div>
-        <div class="arch-value">~/.claude/projects/*.jsonl</div>
-      </div>
-      <div class="arch-item">
-        <div class="arch-label">Storage</div>
-        <div class="arch-value">~/.tab-ledger/</div>
-      </div>
-      <div class="arch-item">
-        <div class="arch-label">Databases</div>
-        <div class="arch-value">ledger.db + knowledge_base.db</div>
-      </div>
-      <div class="arch-item">
-        <div class="arch-label">Search</div>
-        <div class="arch-value">SQLite FTS5 + optional embeddings</div>
-      </div>
+  <section class="s r">
+    <h2 class="s-title">How it works</h2>
+    <p>Tab Ledger reads the JSONL session files that Claude Code writes to disk, extracts structured data, and builds a searchable knowledge base. Nothing leaves your machine.</p>
+    <div class="arch">
+      <div class="arch-cell"><div class="arch-k">Source</div><div class="arch-v">~/.claude/projects/*.jsonl</div></div>
+      <div class="arch-cell"><div class="arch-k">Storage</div><div class="arch-v">~/.tab-ledger/</div></div>
+      <div class="arch-cell"><div class="arch-k">Databases</div><div class="arch-v">ledger.db + knowledge_base.db</div></div>
+      <div class="arch-cell"><div class="arch-k">Search</div><div class="arch-v">SQLite FTS5 + embeddings</div></div>
     </div>
-    <p>The build pipeline runs 8 stages: schema creation, project taxonomy mapping, message indexing, FTS5 build, AI summarization, cross-session linking, auxiliary data indexing, and verification.</p>
   </section>
 
-  <!-- ── Footer ── -->
-  <div class="footer-line"></div>
-  <div class="footer">
+  <div class="foot">
     <a href="https://github.com/Riley-Coyote/tab-ledger">github.com/Riley-Coyote/tab-ledger</a>
-    <br><br>
-    Local-first. No cloud. All yours.
+    <div class="foot-sub">Local-first. No cloud. All yours.</div>
   </div>
 
 </div>
-
 <script>
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
-}, { threshold: 0.1, rootMargin: '0px 0px -30px 0px' });
-document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+const o = new IntersectionObserver(es => {
+  es.forEach(e => { if (e.isIntersecting) e.target.classList.add('v'); });
+}, { threshold: 0.15 });
+document.querySelectorAll('.r').forEach(el => o.observe(el));
 </script>
 </body>
 </html>
