@@ -14,6 +14,8 @@ venv/
 
 # Environment and local config
 .env
+taxonomy.json
+backups/
 
 # OS/editor
 .DS_Store

@@ -28,7 +28,7 @@ def _json_result(data) -> list[TextContent]:
 TOOLS = [
     Tool(
         name="kb_search",
-        description="Full-text search across all KB sessions. Returns matching snippets with session metadata. Supports FTS5 query syntax.",
+        description="Full-text search across all KB sessions, most relevant first (for several words, exact-phrase matches come first). Returns one hit per session: a short snippet around the match (matched words in [brackets]) plus session metadata; use kb_session for the full session. Supports FTS5 query syntax (OR, NEAR, \"exact phrase\", prefix*); hyphenated names and ids work as typed.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -115,7 +115,7 @@ TOOLS = [
     ),
     Tool(
         name="kb_stats",
-        description="Token counts, costs, tool rankings, model breakdown, and phase breakdown. Global or per-project.",
+        description="When the KB was last refreshed (with a warning if it's stale), plus token counts, costs, tool rankings, model breakdown, and phase breakdown. Global or per-project.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -135,65 +135,73 @@ async def list_tools() -> list[Tool]:
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     kb = KnowledgeBase(readonly=True)
     try:
-        if name == "kb_search":
-            results = kb.search(
-                query=arguments["query"],
-                project=arguments.get("project"),
-                limit=arguments.get("limit", 20),
-            )
-            return _json_result(results)
-
-        elif name == "kb_semantic":
-            results = kb.semantic_search(
-                query=arguments["query"],
-                project=arguments.get("project"),
-                source_type=arguments.get("source_type"),
-                limit=arguments.get("limit", 20),
-                provider=arguments.get("provider"),
-                model=arguments.get("model"),
-                min_score=arguments.get("min_score", 0.18),
-            )
-            return _json_result(results)
-
-        elif name == "kb_memory":
-            result = kb.get_memory_packet(
-                project=arguments["project"],
-                semantic_query=arguments.get("semantic_query"),
-                semantic_limit=arguments.get("semantic_limit", 10),
-                provider=arguments.get("provider"),
-                model=arguments.get("model"),
-            )
-            return _json_result(result)
-
-        elif name == "kb_context":
-            result = kb.get_continuation_context(arguments["project"])
-            return _json_result(result)
-
-        elif name == "kb_session":
-            result = kb.get_session(arguments["uuid_prefix"])
-            if result is None:
-                return _json_result({"error": f"Session '{arguments['uuid_prefix']}' not found"})
-            return _json_result(result)
-
-        elif name == "kb_projects":
-            return _json_result(kb.list_projects())
-
-        elif name == "kb_timeline":
-            results = kb.get_timeline(
-                project=arguments["project"],
-                limit=arguments.get("limit", 50),
-            )
-            return _json_result(results)
-
-        elif name == "kb_stats":
-            result = kb.get_stats(project=arguments.get("project"))
-            return _json_result(result)
-
-        else:
-            return _json_result({"error": f"Unknown tool: {name}"})
-
+        result = _dispatch(kb, name, arguments)
+        # A stale KB says so on every tool call, so an outage can't go unnoticed
+        freshness = kb.freshness()
+        if freshness.get("stale"):
+            return [TextContent(type="text", text=f"WARNING: {freshness['warning']}")] + result
+        return result
     finally:
         kb.close()
+
+
+def _dispatch(kb: KnowledgeBase, name: str, arguments: dict) -> list[TextContent]:
+    if name == "kb_search":
+        results = kb.search(
+            query=arguments["query"],
+            project=arguments.get("project"),
+            limit=arguments.get("limit", 20),
+        )
+        return _json_result(results)
+
+    elif name == "kb_semantic":
+        results = kb.semantic_search(
+            query=arguments["query"],
+            project=arguments.get("project"),
+            source_type=arguments.get("source_type"),
+            limit=arguments.get("limit", 20),
+            provider=arguments.get("provider"),
+            model=arguments.get("model"),
+            min_score=arguments.get("min_score", 0.18),
+        )
+        return _json_result(results)
+
+    elif name == "kb_memory":
+        result = kb.get_memory_packet(
+            project=arguments["project"],
+            semantic_query=arguments.get("semantic_query"),
+            semantic_limit=arguments.get("semantic_limit", 10),
+            provider=arguments.get("provider"),
+            model=arguments.get("model"),
+        )
+        return _json_result(result)
+
+    elif name == "kb_context":
+        result = kb.get_continuation_context(arguments["project"])
+        return _json_result(result)
+
+    elif name == "kb_session":
+        result = kb.get_session(arguments["uuid_prefix"])
+        if result is None:
+            return _json_result({"error": f"Session '{arguments['uuid_prefix']}' not found"})
+        return _json_result(result)
+
+    elif name == "kb_projects":
+        return _json_result(kb.list_projects())
+
+    elif name == "kb_timeline":
+        results = kb.get_timeline(
+            project=arguments["project"],
+            limit=arguments.get("limit", 50),
+        )
+        return _json_result(results)
+
+    elif name == "kb_stats":
+        result = kb.get_stats(project=arguments.get("project"))
+        return _json_result(result)
+
+    else:
+        return _json_result({"error": f"Unknown tool: {name}"})
 
 
 async def main():

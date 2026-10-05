@@ -79,7 +79,8 @@ def init_db():
             cost_usd REAL DEFAULT 0.0,
             tools_used TEXT DEFAULT '',
             tool_call_count INTEGER DEFAULT 0,
-            claude_code_version TEXT DEFAULT ''
+            claude_code_version TEXT DEFAULT '',
+            jsonl_size INTEGER
         );
 
         CREATE TABLE IF NOT EXISTS parked_groups (

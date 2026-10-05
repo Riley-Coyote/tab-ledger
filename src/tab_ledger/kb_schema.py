@@ -10,6 +10,11 @@ from pathlib import Path
 from ._paths import KB_DB  # noqa: E402 — centralized in _paths.py
 
 
+def fts_phrase(text: str) -> str:
+    """Quote text as one FTS5 phrase, so '-', ':' and '*' are read literally."""
+    return '"' + text.replace('"', '""') + '"'
+
+
 def get_kb_db(readonly: bool = False) -> sqlite3.Connection:
     """Get a connection to the knowledge base database."""
     if readonly:
@@ -331,7 +336,7 @@ def create_schema(drop_existing: bool = False):
     stages = [
         "taxonomy", "session_import", "message_indexing",
         "fts_build", "summarization", "linking",
-        "auxiliary", "semantic_indexing", "verification",
+        "auxiliary", "semantic_indexing", "verification", "refresh",
     ]
     for stage in stages:
         conn.execute(

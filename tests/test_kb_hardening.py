@@ -74,8 +74,8 @@ def _create_ledger_db(path: Path) -> None:
 
 
 def test_taxonomy_upsert_preserves_existing_enrichment(tmp_path, monkeypatch):
-    import kb_schema
-    import kb_taxonomy
+    from tab_ledger import kb_schema
+    from tab_ledger import kb_taxonomy
 
     kb_path = tmp_path / "knowledge_base.db"
     ledger_path = tmp_path / "ledger.db"
@@ -128,8 +128,8 @@ def test_taxonomy_upsert_preserves_existing_enrichment(tmp_path, monkeypatch):
 
 
 def test_indexer_assigns_project_for_new_session(tmp_path, monkeypatch):
-    import kb_schema
-    import kb_indexer
+    from tab_ledger import kb_schema
+    from tab_ledger import kb_indexer
 
     kb_path = tmp_path / "knowledge_base.db"
     monkeypatch.setattr(kb_schema, "KB_DB", kb_path)
@@ -185,7 +185,7 @@ def test_indexer_assigns_project_for_new_session(tmp_path, monkeypatch):
 
 
 def test_linker_detects_nested_subagent_layout(tmp_path, monkeypatch):
-    import kb_linker
+    from tab_ledger import kb_linker
 
     claude_projects = tmp_path / "projects"
     project_dir = claude_projects / "encoded-project"
@@ -200,8 +200,8 @@ def test_linker_detects_nested_subagent_layout(tmp_path, monkeypatch):
 
 
 def test_auxiliary_claude_ai_indexing_handles_sqlite_rows(tmp_path, monkeypatch):
-    import kb_schema
-    import kb_auxiliary
+    from tab_ledger import kb_schema
+    from tab_ledger import kb_auxiliary
 
     kb_path = tmp_path / "knowledge_base.db"
     claude_ai_db = tmp_path / "conversations.db"

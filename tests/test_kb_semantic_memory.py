@@ -41,8 +41,8 @@ def _seed_project_and_session(kb, project_name: str, session_uuid: str) -> None:
 
 
 def test_semantic_index_search_includes_structured_summary_fields(tmp_path, monkeypatch):
-    import kb_schema
-    import kb_semantic
+    from tab_ledger import kb_schema
+    from tab_ledger import kb_semantic
 
     kb_path = tmp_path / "knowledge_base.db"
     monkeypatch.setattr(kb_schema, "KB_DB", kb_path)
@@ -70,8 +70,8 @@ def test_semantic_index_search_includes_structured_summary_fields(tmp_path, monk
 
 
 def test_memory_packet_falls_back_when_semantic_table_missing(tmp_path, monkeypatch):
-    import kb_schema
-    from kb_query import KnowledgeBase
+    from tab_ledger import kb_schema
+    from tab_ledger.kb_query import KnowledgeBase
 
     kb_path = tmp_path / "knowledge_base.db"
     monkeypatch.setattr(kb_schema, "KB_DB", kb_path)

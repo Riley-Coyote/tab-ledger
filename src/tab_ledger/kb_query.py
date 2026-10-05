@@ -30,12 +30,15 @@ import json
 import os
 import sqlite3
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from textwrap import fill
 
-from .kb_schema import get_kb_db, KB_DB
+from .kb_schema import fts_phrase, get_kb_db, KB_DB
+
+# A knowledge base not refreshed for this long is reported as stale
+STALE_AFTER_HOURS = 48
 
 
 class KnowledgeBase:
@@ -245,7 +248,14 @@ class KnowledgeBase:
         source_type: Optional[str] = None,
         limit: int = 20
     ) -> List[Dict[str, Any]]:
-        """Full-text search across all indexed content.
+        """Full-text search across all indexed content, best match first.
+
+        Returns one hit per session (its best-matching entry) with a short
+        snippet around the match, not the whole message; kb_session has the
+        full detail. A multi-word query ranks entries holding the exact phrase
+        first, then entries with all the words. FTS5 syntax works (OR, NEAR,
+        "phrases", prefix*); a query that isn't valid FTS5, like a hyphenated
+        name or a session id, is searched as literal words instead of failing.
 
         Args:
             query: Search query (FTS5 syntax supported).
@@ -256,38 +266,64 @@ class KnowledgeBase:
         Returns:
             List of search results with session UUIDs, snippets, and metadata.
         """
-        sql = "SELECT * FROM kb_fts WHERE text MATCH ? "
-        params = [query]
+        if not query.strip():
+            return []
+        rows = []
+        if len(query.split()) > 1 and '"' not in query:
+            rows += self._ranked_matches(fts_phrase(query), project, source_type, limit)
+        try:
+            rows += self._ranked_matches(query, project, source_type, limit)
+        except sqlite3.OperationalError:
+            literal = " ".join(fts_phrase(word) for word in query.split())
+            rows += self._ranked_matches(literal, project, source_type, limit)
 
-        if project:
-            sql += "AND project_name = ? "
-            params.append(project)
-
-        if source_type:
-            sql += "AND source_type = ? "
-            params.append(source_type)
-
-        sql += "LIMIT ?"
-        params.append(limit)
-
-        rows = self.conn.execute(sql, params).fetchall()
-
-        # Enrich with session details
         results = []
+        seen = set()
         for row in rows:
             result = dict(row)
-            # Get full session info
-            session = self.get_session(result["session_uuid"])
-            if session:
-                result["session_info"] = {
-                    "slug": session.get("slug"),
-                    "started_at": session.get("started_at"),
-                    "model": session.get("model"),
-                    "summary_text": session.get("summary_text"),
-                }
+            rowid = result.pop("rowid")
+            key = result["session_uuid"] or f"row:{rowid}"  # commands have no session
+            if key in seen:
+                continue
+            seen.add(key)
+            session_info = self._session_brief(result["session_uuid"])
+            if session_info:
+                result["session_info"] = session_info
             results.append(result)
+            if len(results) >= limit:
+                break
 
         return results
+
+    def _ranked_matches(self, match: str, project: Optional[str],
+                        source_type: Optional[str], limit: int) -> List[sqlite3.Row]:
+        """Matching rows by relevance, with room to keep `limit` distinct sessions."""
+        sql = """
+            SELECT rowid, session_uuid, source_type, project_name,
+                   snippet(kb_fts, 0, '[', ']', ' … ', 40) AS snippet
+            FROM kb_fts WHERE text MATCH ?
+        """
+        params: List[Any] = [match]
+        if project:
+            sql += " AND project_name = ?"
+            params.append(project)
+        if source_type:
+            sql += " AND source_type = ?"
+            params.append(source_type)
+        sql += " ORDER BY rank LIMIT ?"
+        params.append(max(limit * 10, 100))
+        return self.conn.execute(sql, params).fetchall()
+
+    def _session_brief(self, session_uuid: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Light session metadata for a search hit (exact id match only)."""
+        if not session_uuid:
+            return None
+        row = self.conn.execute(
+            """SELECT slug, started_at, ended_at, model, summary_text
+               FROM kb_sessions WHERE session_uuid = ?""",
+            (session_uuid,),
+        ).fetchone()
+        return dict(row) if row else None
 
     def _semantic_table_exists(self) -> bool:
         try:
@@ -714,6 +750,42 @@ class KnowledgeBase:
     # STATISTICS
     # ═══════════════════════════════════════════════════════════════════════════
 
+    def freshness(self) -> Dict[str, Any]:
+        """When the knowledge base was last refreshed, and a warning if that's too long ago.
+
+        Uses the last successful `tab-ledger refresh`; a KB that has never
+        recorded one falls back to the last completed message indexing.
+        """
+        row = self.conn.execute(
+            """SELECT stage, completed_at FROM kb_progress
+               WHERE stage IN ('refresh', 'message_indexing') AND completed_at IS NOT NULL
+               ORDER BY stage = 'refresh' DESC LIMIT 1"""
+        ).fetchone()
+        if not row:
+            return {
+                "last_refresh": None,
+                "stale": True,
+                "warning": "No completed refresh is recorded, so search may be missing "
+                           "sessions. Run: tab-ledger index && tab-ledger refresh",
+            }
+
+        completed = datetime.fromisoformat(str(row["completed_at"]).replace("Z", "+00:00"))
+        if completed.tzinfo is None:
+            completed = completed.replace(tzinfo=timezone.utc)  # CURRENT_TIMESTAMP is UTC
+        hours = (datetime.now(timezone.utc) - completed).total_seconds() / 3600
+        result = {
+            "last_refresh": completed.isoformat(timespec="seconds"),
+            "hours_since_refresh": round(hours, 1),
+            "stale": hours > STALE_AFTER_HOURS,
+        }
+        if result["stale"]:
+            result["warning"] = (
+                f"The knowledge base was last refreshed {hours / 24:.1f} days ago, so "
+                f"sessions since then are missing from search. Check the daily refresh "
+                f"job, or run: tab-ledger index && tab-ledger refresh"
+            )
+        return result
+
     def get_stats(self, project: Optional[str] = None) -> Dict[str, Any]:
         """Get global or per-project statistics.
 
@@ -721,7 +793,7 @@ class KnowledgeBase:
             project: Optional project name for per-project stats.
 
         Returns:
-            Dict with tokens, cost, tool usage, model breakdown, etc.
+            Dict with freshness, tokens, cost, tool usage, model breakdown, etc.
         """
         if project:
             sql_where = "WHERE project_id = (SELECT id FROM kb_projects WHERE canonical_name = ?)"
@@ -729,6 +801,8 @@ class KnowledgeBase:
         else:
             sql_where = ""
             params = []
+
+        stats: Dict[str, Any] = {"freshness": self.freshness()}
 
         # Basic stats
         sql = f"""
@@ -748,7 +822,8 @@ class KnowledgeBase:
         """
 
         row = self.conn.execute(sql, params).fetchone()
-        stats = dict(row) if row else {}
+        if row:
+            stats.update(dict(row))
 
         # Model breakdown
         sql = f"""

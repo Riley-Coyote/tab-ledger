@@ -197,7 +197,7 @@ def build_memory_packet(
             for idx, hit in enumerate(lexical_hits):
                 source_type = hit.get("source_type") or "fts"
                 session_uuid = hit.get("session_uuid")
-                preview = (hit.get("text") or "")[:280]
+                preview = (hit.get("snippet") or "")[:280]
                 semantic_hits.append(
                     {
                         "source_key": f"{source_type}:{session_uuid or idx}",

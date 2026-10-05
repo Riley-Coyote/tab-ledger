@@ -8,9 +8,30 @@ Skips stage 4 (summarization) to avoid API costs — run that manually when need
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _record_refresh(status: str, notes: str = None):
+    """Track the refresh in kb_progress; completed_at marks the last successful run."""
+    from .kb_schema import get_kb_db
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    kb = get_kb_db()
+    kb.execute("INSERT OR IGNORE INTO kb_progress (stage, status) VALUES ('refresh', 'pending')")
+    if status == "running":
+        kb.execute(
+            "UPDATE kb_progress SET status = 'running', started_at = ? WHERE stage = 'refresh'",
+            (now,),
+        )
+    else:
+        kb.execute(
+            "UPDATE kb_progress SET status = ?, completed_at = ?, notes = ? WHERE stage = 'refresh'",
+            (status, now, notes),
+        )
+    kb.commit()
+    kb.close()
+
 
 def main():
     start = time.time()
@@ -19,6 +40,7 @@ def main():
     # Stage 0: Ensure schema exists (no-op if already there)
     from .kb_schema import create_schema
     create_schema(drop_existing=False)
+    _record_refresh("running")
 
     # Stage 1: Taxonomy + session import (picks up new sessions from ledger.db)
     print("\n--- Stage 1: Taxonomy & Session Import ---")
@@ -80,6 +102,7 @@ def main():
         print("  Set KB_SEMANTIC_PROVIDER=hash|ollama|openai to enable.")
 
     elapsed = time.time() - start
+    _record_refresh("completed", f"Refresh complete in {int(elapsed)}s")
     print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] KB refresh complete in {int(elapsed)}s")
 
 

@@ -234,3 +234,7 @@ def _get_version():
         return __version__
     except ImportError:
         return "0.1.0"
+
+
+if __name__ == "__main__":
+    main()

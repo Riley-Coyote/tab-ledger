@@ -255,9 +255,21 @@ def parse_jsonl(jsonl_path: Path, project_name: str) -> dict | None:
     }
 
 
+def _ensure_size_column(conn: sqlite3.Connection):
+    """Add cc_sessions.jsonl_size (transcript bytes seen at the last parse) to older ledgers."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(cc_sessions)")}
+    if columns and "jsonl_size" not in columns:
+        try:
+            conn.execute("ALTER TABLE cc_sessions ADD COLUMN jsonl_size INTEGER")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # another process added it first
+
+
 def save_sessions(sessions: list[dict]):
     """Save indexed sessions to ledger.db."""
     conn = sqlite3.connect(LEDGER_DB)
+    _ensure_size_column(conn)
 
     for s in sessions:
         conn.execute("""
@@ -266,9 +278,10 @@ def save_sessions(sessions: list[dict]):
              first_prompt, category, message_count, model, started_at, ended_at,
              slug, is_sidechain, turn_count,
              input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-             total_duration_ms, cost_usd, tools_used, tool_call_count, claude_code_version)
+             total_duration_ms, cost_usd, tools_used, tool_call_count, claude_code_version,
+             jsonl_size)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             s["session_id"], s["project_path"], s["project_name"],
             s["git_branch"], s["summary"], s["first_prompt"],
@@ -279,6 +292,7 @@ def save_sessions(sessions: list[dict]):
             s["cache_creation_tokens"], s["cache_read_tokens"],
             s["total_duration_ms"], s["cost_usd"],
             s["tools_used"], s["tool_call_count"], s["claude_code_version"],
+            s.get("jsonl_size"),
         ))
 
     conn.commit()
@@ -314,46 +328,63 @@ def find_all_jsonl_files() -> list[tuple[Path, str]]:
 def index_all(force: bool = False) -> dict:
     """Index all Claude Code sessions across all projects.
 
+    New transcripts are parsed, and so are transcripts that have grown since
+    they were last parsed (their size changed), so a long session isn't frozen
+    at whatever it held when it was first captured.
+
     Args:
-        force: If True, re-index all sessions (not just new ones).
+        force: If True, re-index all sessions (not just new or grown ones).
     """
     print("Indexing Claude Code sessions...")
 
     all_files = find_all_jsonl_files()
     if not all_files:
         print("  No JSONL files found.")
-        return {"total": 0, "new": 0, "skipped": 0, "errors": 0, "projects": 0}
+        return {"total": 0, "new": 0, "updated": 0, "skipped": 0, "errors": 0, "projects": 0}
 
-    # Get already-indexed session IDs (skip unless force)
-    existing = set()
-    if not force:
-        conn = sqlite3.connect(LEDGER_DB)
-        try:
-            rows = conn.execute("SELECT session_id FROM cc_sessions").fetchall()
-            existing = {r[0] for r in rows}
-        except sqlite3.OperationalError:
-            pass
-        conn.close()
+    # Indexed sessions, with the transcript size seen at their last parse
+    known = {}
+    conn = sqlite3.connect(LEDGER_DB)
+    try:
+        _ensure_size_column(conn)
+        if not force:
+            known = dict(conn.execute("SELECT session_id, jsonl_size FROM cc_sessions").fetchall())
+    except sqlite3.OperationalError:
+        pass
+    conn.close()
 
-    # Filter to only new files
-    to_process = []
+    # One file per session id (the largest, if an id shows up twice)
+    files = {}
     for jsonl_path, project_name in all_files:
+        try:
+            size = jsonl_path.stat().st_size
+        except OSError:
+            continue
         sid = jsonl_path.stem
-        if force or sid not in existing:
-            to_process.append((jsonl_path, project_name))
+        if sid not in files or size > files[sid][2]:
+            files[sid] = (jsonl_path, project_name, size)
+
+    # New sessions, plus sessions whose transcript changed since the last parse
+    to_process = [
+        entry for sid, entry in files.items()
+        if force or sid not in known or known[sid] != entry[2]
+    ]
+    new_count = sum(1 for path, _, _ in to_process if path.stem not in known)
 
     projects_seen = set()
     for _, pn in all_files:
         projects_seen.add(pn)
 
     print(f"  Found {len(all_files)} total JSONL files across {len(projects_seen)} projects")
-    print(f"  Already indexed: {len(existing)}, to process: {len(to_process)}")
+    print(f"  Already indexed: {len(known)}, new: {new_count}, "
+          f"changed since last parse: {len(to_process) - new_count}")
 
     if not to_process:
         print("  Nothing new to index.")
         return {
-            "total": len(existing),
+            "total": len(known),
             "new": 0,
+            "updated": 0,
             "skipped": 0,
             "errors": 0,
             "projects": len(projects_seen),
@@ -365,12 +396,13 @@ def index_all(force: bool = False) -> dict:
     errors = 0
     skipped = 0
 
-    for i, (jsonl_path, project_name) in enumerate(to_process):
+    for i, (jsonl_path, project_name, size) in enumerate(to_process):
         if (i + 1) % batch_size == 0 or i == 0:
             print(f"  Processing {i + 1}/{len(to_process)}...", end="\r")
 
         session = parse_jsonl(jsonl_path, project_name)
         if session:
+            session["jsonl_size"] = size  # measured before parsing, so growth mid-parse is caught next run
             all_sessions.append(session)
         elif session is None:
             # Either error or empty file
@@ -381,8 +413,10 @@ def index_all(force: bool = False) -> dict:
     if all_sessions:
         save_sessions(all_sessions)
 
-    total = len(existing) + len(all_sessions) if not force else len(all_sessions)
-    print(f"  Indexed {len(all_sessions)} new sessions (total: {total})")
+    saved_new = sum(1 for s in all_sessions if s["session_id"] not in known)
+    saved_updated = len(all_sessions) - saved_new
+    total = len(set(known) | {s["session_id"] for s in all_sessions})
+    print(f"  Indexed {saved_new} new sessions, updated {saved_updated} changed sessions (total: {total})")
 
     # Stats summary
     total_tokens_in = sum(s["input_tokens"] for s in all_sessions)
@@ -404,7 +438,7 @@ def index_all(force: bool = False) -> dict:
             for tool in s["tools_used"].split(","):
                 all_tool_usage[tool] += 1
 
-    print(f"\n  === New Session Stats ===")
+    print(f"\n  === Indexed Session Stats ===")
     print(f"  Tokens: {total_tokens_in:,} in / {total_tokens_out:,} out")
     print(f"  Est. cost: ${total_cost:,.2f}")
     print(f"  Tool calls: {total_tools:,}")
@@ -427,7 +461,8 @@ def index_all(force: bool = False) -> dict:
 
     return {
         "total": total,
-        "new": len(all_sessions),
+        "new": saved_new,
+        "updated": saved_updated,
         "skipped": skipped,
         "errors": errors,
         "projects": len(projects_seen),

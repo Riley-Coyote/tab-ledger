@@ -10,7 +10,12 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 from .snapshot import init_db, take_snapshot
 from .cc_indexer import index_all
 
-if __name__ == "__main__":
+
+def main():
     init_db()
     take_snapshot(source="auto")
     index_all()
+
+
+if __name__ == "__main__":
+    main()

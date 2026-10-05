@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Generator, Optional, Tuple, Dict, Any
 from datetime import datetime
 
-from .kb_schema import get_kb_db
+from .kb_schema import fts_phrase, get_kb_db
 from .kb_taxonomy import map_session
 
 
@@ -552,14 +552,43 @@ def index_session_messages(
     return message_count
 
 
+def _sync_session_fts(kb_conn: sqlite3.Connection, session_id: int, session_uuid: str) -> None:
+    """Replace a session's message rows in kb_fts with its current messages.
+
+    The session_uuid MATCH keeps the delete on the full-text index instead of
+    a scan of every row.
+    """
+    kb_conn.execute(
+        """DELETE FROM kb_fts WHERE rowid IN (
+               SELECT rowid FROM kb_fts
+               WHERE kb_fts MATCH ? AND session_uuid = ? AND source_type = 'message')""",
+        (f"session_uuid : {fts_phrase(session_uuid)}", session_uuid),
+    )
+    kb_conn.execute(
+        """INSERT INTO kb_fts (text, session_uuid, source_type, project_name)
+           SELECT m.content_text, s.session_uuid, 'message', p.canonical_name
+           FROM kb_messages m
+           JOIN kb_sessions s ON m.session_id = s.id
+           JOIN kb_projects p ON s.project_id = p.id
+           WHERE m.session_id = ? AND m.content_text IS NOT NULL AND m.content_text != ''
+           ORDER BY m.message_index""",
+        (session_id,),
+    )
+
+
 def index_all_messages(resume: bool = True) -> dict:
     """Index all messages from all JSONL files.
 
     Finds all JSONL files, checks which sessions need indexing, and processes them.
     Batch commits every 50 sessions for safety. Resumable if interrupted.
 
+    A session that's already indexed is indexed again when its transcript has
+    changed size since then (it kept growing after its first capture). If the
+    full-text index is built, each (re)indexed session's rows in it are
+    replaced too, so search matches what's indexed without a full FTS rebuild.
+
     Args:
-        resume: If True, skip sessions that already have messages indexed.
+        resume: If True, skip sessions whose indexed transcript hasn't changed.
                 If False, reindex everything.
 
     Returns:
@@ -569,6 +598,7 @@ def index_all_messages(resume: bool = True) -> dict:
     stats = {
         'total_files_found': 0,
         'sessions_processed': 0,
+        'sessions_reindexed': 0,
         'sessions_skipped': 0,
         'messages_indexed': 0,
         'errors': 0,
@@ -576,9 +606,18 @@ def index_all_messages(resume: bool = True) -> dict:
     }
 
     try:
-        # Find all JSONL files
-        all_jsonls = list(find_all_jsonl())
-        stats['total_files_found'] = len(all_jsonls)
+        # Find all JSONL files; one file per session id (the largest, if an id
+        # shows up more than once, e.g. a subagent transcript copied into a workflow)
+        chosen = {}
+        for jsonl_path, session_uuid in find_all_jsonl():
+            stats['total_files_found'] += 1
+            try:
+                size = jsonl_path.stat().st_size
+            except OSError:
+                continue
+            if session_uuid not in chosen or size > chosen[session_uuid][1]:
+                chosen[session_uuid] = (jsonl_path, size)
+        all_jsonls = [(path, uuid) for uuid, (path, _size) in chosen.items()]
 
         if not resume:
             # Full rebuild mode must not duplicate existing message rows.
@@ -588,18 +627,21 @@ def index_all_messages(resume: bool = True) -> dict:
         # Repair any legacy sessions created without project mapping.
         repaired = _backfill_missing_project_assignments(kb_conn, all_jsonls)
 
-        # Get set of sessions that already have messages in kb_messages table
-        indexed_sessions = set()
+        # Sessions that already have messages, with the transcript size they were indexed at
+        indexed_sizes = {}
         if resume:
             cursor = kb_conn.execute(
-                """SELECT s.session_uuid FROM kb_sessions s
+                """SELECT s.session_uuid, s.jsonl_size_bytes FROM kb_sessions s
                    WHERE s.id IN (SELECT DISTINCT session_id FROM kb_messages)"""
             )
-            indexed_sessions = {row[0] for row in cursor.fetchall()}
+            indexed_sizes = {row[0]: row[1] for row in cursor.fetchall()}
 
-        print(f"Found {stats['total_files_found']} JSONL files")
+        # Keep a built full-text index in step; an empty one is left to the full build (stage 3)
+        sync_fts = kb_conn.execute("SELECT 1 FROM kb_fts LIMIT 1").fetchone() is not None
+
+        print(f"Found {stats['total_files_found']} JSONL files ({len(all_jsonls)} sessions)")
         if resume:
-            print(f"Already indexed: {len(indexed_sessions)} sessions")
+            print(f"Already indexed: {len(indexed_sizes)} sessions")
         if repaired:
             print(f"Backfilled taxonomy for {repaired} orphan sessions")
 
@@ -610,10 +652,14 @@ def index_all_messages(resume: bool = True) -> dict:
             batch_messages = 0
 
             for jsonl_path, session_uuid in batch:
-                # Skip if already indexed and resuming
-                if resume and session_uuid in indexed_sessions:
-                    stats['sessions_skipped'] += 1
-                    continue
+                # Skip if already indexed and the transcript hasn't changed since;
+                # one that changed is indexed again from scratch
+                reindex = False
+                if resume and session_uuid in indexed_sizes:
+                    if indexed_sizes[session_uuid] == chosen[session_uuid][1]:
+                        stats['sessions_skipped'] += 1
+                        continue
+                    reindex = True
 
                 # Get or create session ID
                 session_id = get_session_id_for_uuid(kb_conn, session_uuid, jsonl_path=jsonl_path)
@@ -622,17 +668,28 @@ def index_all_messages(resume: bool = True) -> dict:
                     print(f"Failed to get session ID for {session_uuid}")
                     continue
 
-                # Index messages from this JSONL
+                # Index messages from this JSONL; the savepoint keeps a failed
+                # re-index from leaving the session half-replaced
+                kb_conn.execute("SAVEPOINT index_session")
                 try:
+                    if reindex:
+                        kb_conn.execute("DELETE FROM kb_messages WHERE session_id = ?", (session_id,))
                     msg_count = index_session_messages(kb_conn, session_id, jsonl_path, session_uuid)
+                    if sync_fts:
+                        _sync_session_fts(kb_conn, session_id, session_uuid)
+                    kb_conn.execute("RELEASE index_session")
                     batch_messages += msg_count
                     stats['messages_indexed'] += msg_count
                     stats['sessions_processed'] += 1
+                    if reindex:
+                        stats['sessions_reindexed'] += 1
 
                     if stats['sessions_processed'] % 10 == 0:
                         print(f"  Processed {stats['sessions_processed']} sessions, "
                               f"{stats['messages_indexed']} messages")
                 except Exception as e:
+                    kb_conn.execute("ROLLBACK TO index_session")
+                    kb_conn.execute("RELEASE index_session")
                     stats['errors'] += 1
                     print(f"Error processing {jsonl_path}: {e}")
 
@@ -664,12 +721,16 @@ def index_all_messages(resume: bool = True) -> dict:
                     stats['total_files_found'],
                     stats['errors'],
                     f"Indexed {stats['messages_indexed']} messages from "
-                    f"{stats['sessions_processed']} sessions",
+                    f"{stats['sessions_processed']} sessions "
+                    f"({stats['sessions_reindexed']} re-indexed after growing)",
                 )
             )
             kb_conn.commit()
         except sqlite3.Error as e:
             print(f"Error updating progress: {e}")
+
+        if stats['sessions_reindexed']:
+            print(f"Re-indexed {stats['sessions_reindexed']} sessions whose transcripts grew")
 
         stats['end_time'] = datetime.now()
         stats['duration_sec'] = (stats['end_time'] - stats['start_time']).total_seconds()
@@ -715,6 +776,7 @@ def main():
     print("=" * 70)
     print(f"Total JSONL files found: {stats['total_files_found']}")
     print(f"Sessions processed: {stats['sessions_processed']}")
+    print(f"Sessions re-indexed (grew): {stats['sessions_reindexed']}")
     print(f"Sessions skipped: {stats['sessions_skipped']}")
     print(f"Messages indexed: {stats['messages_indexed']}")
     print(f"Errors: {stats['errors']}")

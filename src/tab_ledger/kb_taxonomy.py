@@ -5,13 +5,19 @@ to a canonical project and sub-project. Path matching is deterministic
 (exact substring match, first match wins, most specific paths first).
 """
 
+import json
 import sqlite3
 from pathlib import Path
 from datetime import datetime
 
 from .kb_schema import get_kb_db, KB_DB
 
-from ._paths import LEDGER_DB
+from ._paths import DATA_DIR, LEDGER_DB
+
+# Your own taxonomy, kept out of the repo: same structure as PROJECTS below,
+# written as JSON arrays (use null for the catch-all pattern). When this file
+# exists it replaces the sample PROJECTS.
+TAXONOMY_FILE = DATA_DIR / "taxonomy.json"
 
 # ═══════════════════════════════════════════════════════
 # PROJECT DEFINITIONS
@@ -75,8 +81,20 @@ PROJECTS = [
 ]
 
 
-def map_session(project_path: str) -> tuple:
+def load_projects() -> list:
+    """The taxonomy in use: TAXONOMY_FILE when it exists, else the sample PROJECTS."""
+    if TAXONOMY_FILE.exists():
+        with open(TAXONOMY_FILE) as f:
+            return json.load(f)
+    return PROJECTS
+
+
+def map_session(project_path: str, projects: list = None) -> tuple:
     """Map a project_path to (project_canonical, sub_project_canonical).
+
+    Args:
+        project_path: Session working directory (or a path-like hint).
+        projects: Taxonomy to match against; defaults to load_projects().
 
     Returns:
         (project_canonical_name, sub_project_canonical_name)
@@ -85,7 +103,7 @@ def map_session(project_path: str) -> tuple:
     if not project_path:
         return ("exploration", "root")
 
-    for proj_name, _display, _tier, sub_projects in PROJECTS:
+    for proj_name, _display, _tier, sub_projects in projects or load_projects():
         for sub_name, _sub_display, path_pattern in sub_projects:
             if path_pattern is None:
                 # Catch-all (must be last in list)
@@ -99,7 +117,7 @@ def map_session(project_path: str) -> tuple:
 
 def get_summarization_tier(project_canonical: str) -> str:
     """Get the summarization tier for a project."""
-    for proj_name, _display, tier, _subs in PROJECTS:
+    for proj_name, _display, tier, _subs in load_projects():
         if proj_name == project_canonical:
             return tier
     return "haiku"
@@ -114,6 +132,7 @@ def build_taxonomy():
     kb = get_kb_db()
     ledger = sqlite3.connect(LEDGER_DB)
     ledger.row_factory = sqlite3.Row
+    projects = load_projects()
 
     # Update progress
     kb.execute(
@@ -124,7 +143,7 @@ def build_taxonomy():
 
     # ── Step 1: Create project records ──
     project_id_map = {}  # canonical_name → id
-    for proj_name, display_name, tier, _subs in PROJECTS:
+    for proj_name, display_name, tier, _subs in projects:
         kb.execute(
             """INSERT OR IGNORE INTO kb_projects
                (canonical_name, display_name, summarization_tier)
@@ -141,7 +160,7 @@ def build_taxonomy():
     # ── Step 2: Create sub-project records ──
     sub_project_id_map = {}  # (proj_name, sub_name) → id
     seen_subs = set()
-    for proj_name, _display, _tier, sub_projects in PROJECTS:
+    for proj_name, _display, _tier, sub_projects in projects:
         pid = project_id_map[proj_name]
         for sub_name, sub_display, path_pattern in sub_projects:
             key = (proj_name, sub_name)
@@ -172,7 +191,7 @@ def build_taxonomy():
     imported = 0
     unmapped = 0
     for i, sess in enumerate(sessions):
-        proj_canonical, sub_canonical = map_session(sess["project_path"])
+        proj_canonical, sub_canonical = map_session(sess["project_path"], projects)
         pid = project_id_map.get(proj_canonical)
         sid = sub_project_id_map.get((proj_canonical, sub_canonical))
 
@@ -246,24 +265,19 @@ def build_taxonomy():
     kb.commit()
 
     # ── Step 4: Update project aggregates ──
-    for proj_name, pid in project_id_map.items():
-        stats = kb.execute("""
-            SELECT
-                COUNT(*) as cnt,
-                ROUND(SUM(cost_usd), 2) as cost,
-                MIN(started_at) as first_at,
-                MAX(ended_at) as last_at
-            FROM kb_sessions WHERE project_id = ?
-        """, (pid,)).fetchone()
-
-        kb.execute("""
-            UPDATE kb_projects SET
-                total_sessions = ?,
-                total_cost_usd = ?,
-                first_session_at = ?,
-                last_session_at = ?
-            WHERE id = ?
-        """, (stats["cnt"], stats["cost"], stats["first_at"], stats["last_at"], pid))
+    # Every project row, so rows left from an earlier taxonomy don't keep stale
+    # totals; a project with no sessions gets 0, not NULL.
+    kb.execute("""
+        UPDATE kb_projects SET
+            total_sessions = (SELECT COUNT(*) FROM kb_sessions s
+                              WHERE s.project_id = kb_projects.id),
+            total_cost_usd = (SELECT COALESCE(ROUND(SUM(cost_usd), 2), 0) FROM kb_sessions s
+                              WHERE s.project_id = kb_projects.id),
+            first_session_at = (SELECT MIN(started_at) FROM kb_sessions s
+                                WHERE s.project_id = kb_projects.id),
+            last_session_at = (SELECT MAX(ended_at) FROM kb_sessions s
+                               WHERE s.project_id = kb_projects.id)
+    """)
 
     # Update sub-project counts
     for (proj_name, sub_name), sid in sub_project_id_map.items():
